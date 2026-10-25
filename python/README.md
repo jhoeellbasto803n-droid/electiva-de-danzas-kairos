@@ -49,6 +49,8 @@ La app crea las tablas necesarias al iniciar; no es necesario usar pgAdmin para 
 
 Waitress ejecuta la aplicación con hilos y el pool de PostgreSQL reutiliza conexiones. La configuración inicial contempla decenas de solicitudes simultáneas y cuentas de más de 100 usuarios. Para publicar la aplicación a un grupo institucional se debe desplegar en un servidor con HTTPS, configurar `APP_ENV=production`, `APP_ORIGIN` con el dominio real, `HOST=0.0.0.0` detrás de un proxy confiable, y dimensionar el pool y el número de hilos según el servidor. El equipo local no debe exponerse directamente a Internet.
 
+En producción Python confía un solo proxy frontal para obtener la IP cliente y el protocolo HTTPS. Conserva ese límite: no configures `ProxyFix` para confiar todos los proxies ni expongas Waitress directamente a Internet. El servidor aplica límites de intentos de autenticación por IP, poda las entradas antiguas de ese limitador, rechaza contraseñas de inicio de sesión mayores al límite admitido, protege las respuestas de API contra caché y requiere el origen correcto también al cerrar sesión. Para producción, usa PostgreSQL con almacenamiento persistente y copias de seguridad; la base gratuita de Render caduca a los 30 días.
+
 ## Estructura
 
 - `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API y servidor Waitress.

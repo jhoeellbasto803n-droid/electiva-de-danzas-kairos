@@ -40,14 +40,18 @@ STATIC_DIR = BASE_DIR / "static"
 load_dotenv(BASE_DIR / ".env")
 
 PORT = int(os.getenv("PORT", "3001"))
-HOST = os.getenv("HOST", "127.0.0.1")
-APP_ORIGIN = os.getenv("APP_ORIGIN", f"http://localhost:{PORT}")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-SESSION_SECRET = os.getenv("SESSION_SECRET", "")
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 PRODUCTION = APP_ENV == "production"
+HOST = os.getenv("HOST", "0.0.0.0" if PRODUCTION else "127.0.0.1")
+APP_ORIGIN = os.getenv("APP_ORIGIN") or os.getenv("RENDER_EXTERNAL_URL") or f"http://localhost:{PORT}"
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+SESSION_SECRET = os.getenv("SESSION_SECRET", "")
 SESSION_LIFETIME = timedelta(hours=8)
 MAX_BODY_BYTES = 2 * 1024 * 1024
+ORIGIN_PARTS = urlsplit(APP_ORIGIN)
+if PRODUCTION and (ORIGIN_PARTS.scheme != "https" or not ORIGIN_PARTS.netloc or ORIGIN_PARTS.path not in ("", "/") or ORIGIN_PARTS.query or ORIGIN_PARTS.fragment):
+    raise RuntimeError("APP_ORIGIN debe ser la URL HTTPS pública, sin ruta, parámetros ni fragmento.")
+EXPECTED_ORIGIN = f"{ORIGIN_PARTS.scheme}://{ORIGIN_PARTS.netloc}".lower()
 
 if not DATABASE_URL:
     raise RuntimeError("Configura DATABASE_URL en el archivo .env antes de iniciar.")
@@ -232,20 +236,18 @@ def session_data():
 
 def same_origin():
     origin = request.headers.get("Origin")
-    actual = urlsplit(APP_ORIGIN)
-    expected = f"{actual.scheme}://{actual.netloc}".lower()
-    allowed = bool(origin and origin.rstrip("/").lower() == expected)
+    allowed = bool(origin and origin.rstrip("/").lower() == EXPECTED_ORIGIN)
     if origin and not allowed and not PRODUCTION:
         try:
             requested = urlsplit(origin)
             loopback_hosts = {"localhost", "127.0.0.1", "::1"}
             requested_port = requested.port or (443 if requested.scheme.lower() == "https" else 80)
-            configured_port = actual.port or (443 if actual.scheme.lower() == "https" else 80)
+            configured_port = ORIGIN_PARTS.port or (443 if ORIGIN_PARTS.scheme.lower() == "https" else 80)
             allowed = (
-                requested.scheme.lower() == actual.scheme.lower()
+                requested.scheme.lower() == ORIGIN_PARTS.scheme.lower()
                 and requested_port == configured_port
                 and requested.hostname in loopback_hosts
-                and actual.hostname in loopback_hosts
+                and ORIGIN_PARTS.hostname in loopback_hosts
                 and requested.path in ("", "/")
                 and not requested.query
                 and not requested.fragment
@@ -261,12 +263,23 @@ AUTH_ATTEMPTS = defaultdict(deque)
 AUTH_LOCK = threading.Lock()
 AUTH_WINDOW_SECONDS = 15 * 60
 AUTH_MAX_ATTEMPTS = 12
+AUTH_LIMITER_CHECKS = 0
 
 
 def rate_limit_auth():
+    global AUTH_LIMITER_CHECKS
     now = time.monotonic()
     key = request.remote_addr or "unknown"
     with AUTH_LOCK:
+        AUTH_LIMITER_CHECKS += 1
+        if AUTH_LIMITER_CHECKS % 128 == 0 or len(AUTH_ATTEMPTS) >= 10000:
+            for address, queue in list(AUTH_ATTEMPTS.items()):
+                while queue and now - queue[0] >= AUTH_WINDOW_SECONDS:
+                    queue.popleft()
+                if not queue:
+                    AUTH_ATTEMPTS.pop(address, None)
+            while len(AUTH_ATTEMPTS) >= 10000 and key not in AUTH_ATTEMPTS:
+                AUTH_ATTEMPTS.pop(next(iter(AUTH_ATTEMPTS)))
         attempts = AUTH_ATTEMPTS[key]
         while attempts and now - attempts[0] >= AUTH_WINDOW_SECONDS:
             attempts.popleft()
@@ -330,7 +343,7 @@ def login():
     body = request_object()
     email = str(body.get("email") or "").strip().lower()
     password = str(body.get("password") or "")
-    if not valid_email(email) or not password:
+    if not valid_email(email) or not password or len(password.encode("utf-8")) > 256:
         return jsonify(error="Correo o contraseña incorrectos."), 401
     with pool.connection() as conn:
         row = conn.execute(
@@ -365,6 +378,9 @@ def current_user():
 @app.post("/api/auth/logout")
 @auth_required
 def logout():
+    rejected = same_origin()
+    if rejected:
+        return rejected
     from flask import session
 
     session.clear()
@@ -434,10 +450,18 @@ def security_headers(response):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    if PRODUCTION and request.is_secure:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        + ("; upgrade-insecure-requests" if PRODUCTION else ""),
     )
     return response
 
@@ -482,6 +506,11 @@ def initialize_database():
 
 
 def main():
+    if PRODUCTION:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        # Trust only the single HTTPS proxy in front of the app (for example Render).
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     pool.open()
     pool.wait(timeout=15)
     initialize_database()

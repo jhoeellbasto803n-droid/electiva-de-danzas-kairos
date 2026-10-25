@@ -41,6 +41,17 @@ Crea una base PostgreSQL llamada `electiva_danzas` desde pgAdmin (**Databases �
 
 Alternativa manual desde la carpeta `nodejs/`: duplica `.env.example` como `.env`, actualiza `DATABASE_URL`, `APP_ORIGIN` y `SESSION_SECRET`, ejecuta `npm install` y `npm start`.
 
+## Publicar en internet con Render
+
+El archivo [`render.yaml`](render.yaml) configura el servidor Node.js de esta carpeta como servicio web. El despliegue público necesita una base PostgreSQL alojada en internet; la PostgreSQL instalada en tu computador solo sirve para desarrollo local.
+
+1. En Render crea una base PostgreSQL y elige su región. Copia la **Internal Database URL**; la aplicación debe conectarse por la red privada de Render.
+2. En Render usa **New → Blueprint** y conecta este repositorio de GitHub. El asistente encuentra `render.yaml`; al solicitar `DATABASE_URL`, pega la Internal Database URL. Render genera `SESSION_SECRET` y conecta `APP_ORIGIN` a la URL pública del servicio.
+3. Al terminar, abre la URL `onrender.com` y crea una cuenta. Si luego agregas un dominio propio, actualiza `APP_ORIGIN` con ese dominio en la configuración del servicio.
+4. Render usa el plan web gratuito para esta demostración; puede tardar alrededor de un minuto en despertar después de inactividad. Para guardar información real a largo plazo, elige una base de datos con almacenamiento persistente y copias de seguridad, y revisa el precio que aparece en Render antes de crearla.
+
+La base PostgreSQL gratuita de Render es temporal: vence a los 30 días y no incluye copias de seguridad. Úsala solo para probar la publicación; no guardes allí información académica real. El repositorio no incluye contraseñas ni claves de producción.
+
 ## Ejecutar la versión Python
 
 1. Abre `python/`.
@@ -63,5 +74,11 @@ Los CSV de Google Calendar requieren encabezados en inglés. La importación cre
 ## Seguridad y datos
 
 Los archivos `.env`, entornos virtuales, dependencias instaladas, cachés y bases de datos locales están excluidos del repositorio. No publiques tu contraseña de PostgreSQL ni copies tu `.env` a GitHub. Usa `.env.example` como plantilla y coloca tus propios datos solo en el `.env` local.
+
+El servidor Node aplica límites a los intentos de registro e inicio de sesión, valida el origen de las solicitudes que cambian datos, protege las sesiones con cookies `HttpOnly` y `SameSite`, requiere HTTPS y un origen configurado al ejecutarse en producción, añade cabeceras de seguridad y evita guardar respuestas privadas de la API en caché. El servidor Python comparte las protecciones de origen, sesión y cabeceras, limita el tamaño de las solicitudes y ahora comprueba el origen al cerrar sesión. GitHub Actions revisa semanalmente las dependencias de Node.js y Python; Dependabot propone actualizaciones de dependencias y acciones.
+
+Estas medidas reducen riesgos comunes, pero no sustituyen una auditoría de seguridad antes de almacenar información personal de una institución. Activa HTTPS, usa una base con copias de seguridad y define reglas de privacidad y recuperación de cuenta antes de invitar usuarios reales.
+
+Consulta [SECURITY.md](SECURITY.md) para las pautas de despliegue, secretos y reporte de problemas.
 
 Las materias, calificaciones, tareas y fechas de demostración son ficticias; verifica los datos académicos con tus docentes.

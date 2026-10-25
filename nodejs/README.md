@@ -52,6 +52,10 @@ El servidor usa Express, sesiones PostgreSQL y una base de datos PostgreSQL comp
 
 Antes de abrir registros al público, configura HTTPS y un `SESSION_SECRET` aleatorio de al menos 32 caracteres; también conviene añadir verificación de correo y recuperación de contraseña. El prototipo no implementa verificación por correo, recuperación ni pagos.
 
+Para desplegar la versión Node.js en Render, usa el Blueprint `../render.yaml` desde la raíz del repositorio. Configura `DATABASE_URL` con la URL interna de una PostgreSQL en Render y conserva el secreto generado por Render. La aplicación exige `APP_ORIGIN` HTTPS al ejecutarse con `NODE_ENV=production`, confía en un solo proxy frontal para reconocer HTTPS, limita los intentos de autenticación, añade cabeceras HTTP de seguridad y marca las respuestas de la API como privadas y no almacenables en caché. En despliegues con dominio propio, actualiza `APP_ORIGIN` para que coincida exactamente con el dominio.
+
+El escaneo de dependencias se ejecuta desde GitHub Actions y Dependabot revisa versiones semanalmente. Una base PostgreSQL gratuita de Render vence a los 30 días y no tiene copias de seguridad; selecciona almacenamiento persistente y respaldado si vas a guardar datos reales.
+
 ## Agente de IA futuro
 
 `ai-agent.js` ofrece por ahora una revisión determinista local con expresiones y reglas básicas: sugiere candidatos, muestra contexto y advierte ambigüedades; no pretende comprender semántica compleja ni enviar texto fuera del navegador. La arquitectura futura separará: (1) extracción probabilística de texto; (2) reglas deterministas para validar fechas, ponderaciones y contradicciones; y (3) optimización y escenarios. Las extracciones inciertas requieren confirmación del estudiante. El prototipo no se conecta a plataformas en vivo, no hace trabajos y no los entrega. Las tres materias, sus notas y las ponderaciones y fechas de ejemplo son inventadas para mostrar la interfaz; confirma todos esos datos con tu docente antes de usarlos.
