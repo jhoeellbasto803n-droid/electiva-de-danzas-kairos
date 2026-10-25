@@ -15,6 +15,7 @@ Este documento resume las etapas que construyeron el proyecto y lo que queda con
 11. **Preparación de publicación:** se documentaron requisitos, configuración y pasos de inicio; se añadieron CSV de prueba y reglas de Git para excluir secretos, dependencias, cachés y bases locales.
 12. **Revisión de los cuatro documentos del proyecto:** se normalizaron nueve tipos de actividad, se añadió un revisor local de texto para extraer candidatos y señalar ambigüedad, y se reforzó la confirmación humana antes de usar datos.
 13. **Optimización explicable:** los escenarios ahora seleccionan la combinación de actividades que mejor cabe según el criterio activo y la capacidad disponible; muestran por actividad qué queda fuera, sin calcular una nota perdida ficticia. La mejora se comparte entre Node.js y Python.
+14. **Corrección de controles inactivos (24 de octubre de 2026):** se corrigió una comilla faltante en `app.js` que impedía ejecutar todo el archivo y conectar los botones del organizador. La inicialización ahora valida que los módulos principales estén activos antes de mostrar el panel y presenta el error si algo falla. También se permite el alias local `127.0.0.1`/`localhost` en desarrollo, manteniendo la validación estricta en producción.
 
 ## Pendiente para integraciones institucionales
 

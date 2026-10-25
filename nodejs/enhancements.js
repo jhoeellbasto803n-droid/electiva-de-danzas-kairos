@@ -258,7 +258,8 @@ function bindPlan(){
 }
 function bindAll(){bindFocus();bindImport();bindSubjectEdit();bindPlan()}
 window.renderEnhancements=()=>{renderFocus();renderPlan()};
-if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",()=>{bindAll();window.renderEnhancements()},{once:true})}else{bindAll();window.renderEnhancements()}
+function initializeEnhancements(){bindAll();window.renderEnhancements();window.__electivaEnhancementsReady=true}
+if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initializeEnhancements,{once:true})}else{initializeEnhancements()}
 })();
 
 

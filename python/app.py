@@ -234,7 +234,25 @@ def same_origin():
     origin = request.headers.get("Origin")
     actual = urlsplit(APP_ORIGIN)
     expected = f"{actual.scheme}://{actual.netloc}".lower()
-    if not origin or origin.rstrip("/").lower() != expected:
+    allowed = bool(origin and origin.rstrip("/").lower() == expected)
+    if origin and not allowed and not PRODUCTION:
+        try:
+            requested = urlsplit(origin)
+            loopback_hosts = {"localhost", "127.0.0.1", "::1"}
+            requested_port = requested.port or (443 if requested.scheme.lower() == "https" else 80)
+            configured_port = actual.port or (443 if actual.scheme.lower() == "https" else 80)
+            allowed = (
+                requested.scheme.lower() == actual.scheme.lower()
+                and requested_port == configured_port
+                and requested.hostname in loopback_hosts
+                and actual.hostname in loopback_hosts
+                and requested.path in ("", "/")
+                and not requested.query
+                and not requested.fragment
+            )
+        except ValueError:
+            allowed = False
+    if not allowed:
         return jsonify(error="Origen de solicitud no permitido."), 403
     return None
 
