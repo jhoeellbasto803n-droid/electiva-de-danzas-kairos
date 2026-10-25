@@ -1,6 +1,6 @@
-# KAIROS — Electiva de Danzas
+# KAIROS — Organizador de Ciencias de Datos
 
-Organizador académico para planear actividades, materias y sesiones de estudio de la electiva de danzas. Incluye dos implementaciones del servidor: **Node.js + PostgreSQL** y **Python + PostgreSQL**. La interfaz web es compartida entre las dos versiones.
+Entorno de estudio para estudiantes de Ciencia de Datos: planifica materias y entregas, registra sesiones de enfoque y documenta experimentos en una bitácora privada. Incluye dos implementaciones del servidor: **Node.js + PostgreSQL** y **Python + PostgreSQL**. Ambas versiones comparten la misma interfaz y el mismo formato de datos.
 
 ## Versiones incluidas
 
@@ -20,9 +20,13 @@ Organizador académico para planear actividades, materias y sesiones de estudio 
 - Exportación del plan semanal como CSV con encabezados compatibles con la importación de Google Calendar. La persona elige la hora de inicio; el plan se ordena en secuencia con pausas breves.
 - Temporizador de concentración configurable con pausa, continuación y alarma sonora.
 - Importación local de calendarios `.ics` y actividades `.csv`; copia/restauración de datos.
-- Revisor local de instrucciones disponible; el modelo probabilístico futuro y las conexiones institucionales todavía no están conectados.
+- Materias y actividades de ejemplo para programación con pandas, estadística, SQL, aprendizaje automático y visualización. Los datos, notas, ponderaciones y fechas son ficticios.
+- Cuaderno privado de experimentos con pregunta, fuente, método, métrica, resultado, límites y siguiente paso; permite editar, eliminar y exportar los registros como CSV.
+- Cambio de contraseña con invalidación de otras sesiones y eliminación de cuenta verificada con contraseña y frase de confirmación.
+- Aplicación web instalable (PWA) que almacena los recursos estáticos; el inicio de sesión, la bitácora y la sincronización requieren conexión.
+- Revisor local de instrucciones disponible; el agente de IA y las conexiones institucionales todavía no están conectados.
 
-La integración con Google Calendar es por archivo CSV. El revisor de texto es determinista y local; no es todavía un modelo probabilístico ni una conexión institucional. Moodle, Canvas, Teams u otros portales institucionales no están conectados en vivo: eso requiere APIs oficiales y autorización de cada institución.
+La integración con Google Calendar es por archivo CSV. El revisor de texto es determinista y local; no es todavía un modelo de IA ni una conexión institucional. Moodle, Canvas, Teams u otros portales institucionales no están conectados en vivo: eso requiere APIs oficiales y autorización de cada institución.
 
 ## Requisitos
 

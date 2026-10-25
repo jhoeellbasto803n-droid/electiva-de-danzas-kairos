@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title KAIROS - Electiva de Danzas (Python)
+title KAIROS - Ciencias de Datos (Python)
 
 where py >nul 2>nul
 if errorlevel 1 (

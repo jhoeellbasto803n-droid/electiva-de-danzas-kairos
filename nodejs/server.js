@@ -6,6 +6,8 @@ const production=process.env.NODE_ENV==="production";
 const port=Number(process.env.PORT||3000);
 const host=process.env.HOST||(production?"0.0.0.0":"127.0.0.1");
 const configuredOrigin=process.env.APP_ORIGIN||process.env.RENDER_EXTERNAL_URL||"";
+const dbPoolMax=Number(process.env.DB_POOL_MAX||30);
+if(!Number.isInteger(dbPoolMax)||dbPoolMax<5||dbPoolMax>100)throw new Error("DB_POOL_MAX debe ser un entero entre 5 y 100.");
 if(!process.env.SESSION_SECRET||process.env.SESSION_SECRET.length<32)throw new Error("SESSION_SECRET debe tener al menos 32 caracteres.");
 if(!process.env.DATABASE_URL)throw new Error("Configura DATABASE_URL en .env.");
 if(production&&!configuredOrigin)throw new Error("Configura APP_ORIGIN con la URL HTTPS pública de la aplicación.");
@@ -16,7 +18,7 @@ if(configuredOrigin){
  expectedOrigin=parsedOrigin.origin;
 }
 if(production)app.set("trust proxy",1);
-const pool=new Pool({connectionString:process.env.DATABASE_URL,max:20,idleTimeoutMillis:30000,connectionTimeoutMillis:5000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,max:dbPoolMax,idleTimeoutMillis:30000,connectionTimeoutMillis:5000});
 pool.on("error",error=>console.error("PostgreSQL pool error",error.message));
 const PgStore=connectPgSimple(session);
 app.disable("x-powered-by");
@@ -34,8 +36,9 @@ async function hashPassword(password){const salt=crypto.randomBytes(16).toString
 async function verifyPassword(password,stored){const parts=String(stored||"").split("$");if(parts.length!==3||parts[0]!=="scrypt")return false;try{const expected=Buffer.from(parts[2],"hex"),actual=await derive(password,parts[1]);return expected.length===actual.length&&crypto.timingSafeEqual(expected,actual)}catch(err){return false}}
 function establishSession(req,id){return new Promise((resolve,reject)=>req.session.regenerate(err=>{if(err)return reject(err);req.session.userId=id;req.session.save(err=>err?reject(err):resolve())}))}
 function destroySession(req){return new Promise((resolve,reject)=>req.session.destroy(err=>err?reject(err):resolve()))}
+async function deletePythonSessions(userId){const table=await pool.query("SELECT to_regclass('kairos_python_sessions') AS name");if(table.rows[0]?.name)await pool.query("DELETE FROM kairos_python_sessions WHERE data->>'user_id'=$1",[userId])}
 function validEmail(value){return typeof value==="string"&&value.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)}
-const publicFiles=new Set(["index.html","styles.css","ai-agent.js","auth-client.js","app.js","enhancements.js","fonts/inter-variable-latin.woff2","fonts/poppins-400-latin.woff2","fonts/poppins-500-latin.woff2","fonts/poppins-600-latin.woff2","fonts/poppins-700-latin.woff2","fonts/poppins-800-latin.woff2"]);
+const publicFiles=new Set(["index.html","styles.css","ai-agent.js","auth-client.js","app.js","enhancements.js","lab.js","manifest.webmanifest","service-worker.js","icon-192.svg","icon-512.svg","icon-192.png","icon-512.png","fonts/inter-variable-latin.woff2","fonts/poppins-400-latin.woff2","fonts/poppins-500-latin.woff2","fonts/poppins-600-latin.woff2","fonts/poppins-700-latin.woff2","fonts/poppins-800-latin.woff2"]);
 app.get("/api/health",asyncRoute(async(req,res)=>{await pool.query("SELECT 1");res.json({status:"ok"})}));
 app.post("/api/auth/register",sameOrigin,authLimiter,asyncRoute(async(req,res)=>{
  const name=String(req.body.name||"").trim(),email=String(req.body.email||"").trim().toLowerCase(),password=String(req.body.password||"");
@@ -55,6 +58,25 @@ app.post("/api/auth/login",sameOrigin,authLimiter,asyncRoute(async(req,res)=>{
 }));
 app.get("/api/auth/me",requireAuth,asyncRoute(async(req,res)=>{const result=await pool.query("SELECT id,name,email FROM app_users WHERE id=$1",[req.session.userId]);if(!result.rows[0]){await destroySession(req);return res.status(401).json({error:"La cuenta ya no existe."})}res.json({user:publicUser(result.rows[0])})}));
 app.post("/api/auth/logout",sameOrigin,requireAuth,asyncRoute(async(req,res)=>{await destroySession(req);res.clearCookie("kairos.sid",{httpOnly:true,secure:production,sameSite:"lax"});res.json({ok:true})}));
+app.post("/api/auth/password",sameOrigin,authLimiter,requireAuth,asyncRoute(async(req,res)=>{
+ const current=String(req.body.currentPassword||""),next=String(req.body.newPassword||""),id=req.session.userId;
+ if(Buffer.byteLength(current,"utf8")>256)return res.status(401).json({error:"La contraseña actual no es correcta."});
+ if(next.length<10||Buffer.byteLength(next,"utf8")>256)return res.status(400).json({error:"La nueva contraseña debe tener al menos 10 caracteres."});
+ const result=await pool.query("SELECT password_hash FROM app_users WHERE id=$1",[id]);
+ if(!result.rows[0]||!(await verifyPassword(current,result.rows[0].password_hash)))return res.status(401).json({error:"La contraseña actual no es correcta."});
+ const hash=await hashPassword(next);await pool.query("UPDATE app_users SET password_hash=$1 WHERE id=$2",[hash,id]);
+ await pool.query("DELETE FROM web_sessions WHERE sess->>'userId'=$1 AND sid<>$2",[id,req.sessionID]);await deletePythonSessions(id);await establishSession(req,id);
+ res.json({ok:true,message:"Contraseña actualizada. Se cerraron las demás sesiones."});
+}));
+app.delete("/api/auth/account",sameOrigin,authLimiter,requireAuth,asyncRoute(async(req,res)=>{
+ const password=String(req.body.password||""),confirmation=String(req.body.confirmation||""),id=req.session.userId;
+ if(confirmation!=="ELIMINAR")return res.status(400).json({error:"Escribe ELIMINAR para confirmar."});
+ const result=await pool.query("SELECT password_hash FROM app_users WHERE id=$1",[id]);
+ if(!result.rows[0]||!(await verifyPassword(password,result.rows[0].password_hash)))return res.status(401).json({error:"La contraseña no es correcta."});
+ await pool.query("DELETE FROM web_sessions WHERE sess->>'userId'=$1",[id]);await deletePythonSessions(id);
+ await pool.query("DELETE FROM app_users WHERE id=$1",[id]);await destroySession(req);
+ res.clearCookie("kairos.sid",{httpOnly:true,secure:production,sameSite:"lax"});res.json({ok:true});
+}));
 app.get("/api/planner/state",requireAuth,asyncRoute(async(req,res)=>{const result=await pool.query("SELECT data FROM planner_data WHERE user_id=$1",[req.session.userId]);res.json({data:result.rows[0]?result.rows[0].data:null})}));
 app.put("/api/planner/state",sameOrigin,requireAuth,asyncRoute(async(req,res)=>{
  const data=req.body&&req.body.data;
@@ -62,12 +84,12 @@ app.put("/api/planner/state",sameOrigin,requireAuth,asyncRoute(async(req,res)=>{
  if(Buffer.byteLength(JSON.stringify(data),"utf8")>2*1024*1024)return res.status(413).json({error:"La copia de planificación supera el límite de 2 MB."});
  await pool.query("INSERT INTO planner_data(user_id,data,updated_at) VALUES($1,$2::jsonb,NOW()) ON CONFLICT(user_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()",[req.session.userId,JSON.stringify(data)]);res.json({ok:true});
 }));
-app.get(["/","/index.html","/styles.css","/ai-agent.js","/auth-client.js","/app.js","/enhancements.js","/fonts/:font"],(req,res)=>{const name=req.path==="/"?"index.html":req.path.slice(1);if(!publicFiles.has(name))return res.sendStatus(404);res.sendFile(path.join(__dirname,name))});
+app.get(["/","/index.html","/styles.css","/ai-agent.js","/auth-client.js","/app.js","/enhancements.js","/lab.js","/manifest.webmanifest","/service-worker.js","/icon-192.svg","/icon-512.svg","/icon-192.png","/icon-512.png","/fonts/:font"],(req,res)=>{const name=req.path==="/"?"index.html":req.path.slice(1);if(!publicFiles.has(name))return res.sendStatus(404);if(name==="service-worker.js")res.set("Service-Worker-Allowed","/").set("Cache-Control","no-cache");res.sendFile(path.join(__dirname,name))});
 app.use((err,req,res,next)=>{console.error("Request error",err.message);if(res.headersSent)return next(err);res.status(500).json({error:"Ocurrió un error del servidor. Inténtalo de nuevo."})});
 async function main(){
  await pool.query("CREATE TABLE IF NOT EXISTS app_users(id TEXT PRIMARY KEY,name VARCHAR(80) NOT NULL,email VARCHAR(254) NOT NULL UNIQUE,password_hash TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
  await pool.query("CREATE TABLE IF NOT EXISTS planner_data(user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,data JSONB NOT NULL,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
- const server=app.listen(port,host,()=>console.log("Electiva de Danzas disponible en http://"+host+":"+port));
+ const server=app.listen(port,host,()=>console.log("KAIROS disponible en http://"+host+":"+port));
  const shutdown=()=>server.close(()=>pool.end().finally(()=>process.exit(0)));process.on("SIGTERM",shutdown);process.on("SIGINT",shutdown)
 }
 main().catch(err=>{console.error("No pude iniciar el servidor:",err.message);process.exit(1)});

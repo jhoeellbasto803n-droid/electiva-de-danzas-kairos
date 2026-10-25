@@ -1,4 +1,4 @@
-"""Servidor Python para Electiva de Danzas / KAIROS.
+"""Servidor Python para KAIROS Ciencias de Datos.
 
 Conserva la API usada por la interfaz web y guarda usuarios, sesiones y
 planificacion en PostgreSQL. La primera version no incluye el agente de IA.
@@ -48,6 +48,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 SESSION_SECRET = os.getenv("SESSION_SECRET", "")
 SESSION_LIFETIME = timedelta(hours=8)
 MAX_BODY_BYTES = 2 * 1024 * 1024
+DB_POOL_MAX = int(os.getenv("DB_POOL_MAX", "30"))
+if not 5 <= DB_POOL_MAX <= 100:
+    raise RuntimeError("DB_POOL_MAX debe estar entre 5 y 100.")
 ORIGIN_PARTS = urlsplit(APP_ORIGIN)
 if PRODUCTION and (ORIGIN_PARTS.scheme != "https" or not ORIGIN_PARTS.netloc or ORIGIN_PARTS.path not in ("", "/") or ORIGIN_PARTS.query or ORIGIN_PARTS.fragment):
     raise RuntimeError("APP_ORIGIN debe ser la URL HTTPS pública, sin ruta, parámetros ni fragmento.")
@@ -64,7 +67,7 @@ logger = logging.getLogger("kairos")
 pool = ConnectionPool(
     conninfo=DATABASE_URL,
     min_size=1,
-    max_size=int(os.getenv("DB_POOL_MAX", "30")),
+    max_size=DB_POOL_MAX,
     timeout=10,
     kwargs={"row_factory": dict_row},
     open=False,
@@ -387,6 +390,77 @@ def logout():
     return jsonify(ok=True)
 
 
+@app.post("/api/auth/password")
+@auth_required
+def change_password():
+    rejected = same_origin() or rate_limit_auth()
+    if rejected:
+        return rejected
+    body = request_object()
+    current = str(body.get("currentPassword") or "")
+    new_password = str(body.get("newPassword") or "")
+    user_id = session_data().get("user_id")
+    if len(current.encode("utf-8")) > 256:
+        return jsonify(error="La contraseña actual no es correcta."), 401
+    if len(new_password) < 10 or len(new_password.encode("utf-8")) > 256:
+        return jsonify(error="La nueva contraseña debe tener al menos 10 caracteres."), 400
+    with pool.connection() as conn:
+        row = conn.execute(
+            "SELECT password_hash FROM app_users WHERE id=%s", (user_id,)
+        ).fetchone()
+    if not row or not verify_password(current, row["password_hash"]):
+        return jsonify(error="La contraseña actual no es correcta."), 401
+    with pool.connection() as conn:
+        conn.execute(
+            "UPDATE app_users SET password_hash=%s WHERE id=%s",
+            (password_hash(new_password), user_id),
+        )
+        conn.execute(
+            "DELETE FROM kairos_python_sessions WHERE data->>'user_id'=%s AND sid<>%s",
+            (user_id, session_data().sid),
+        )
+        if conn.execute(
+            "SELECT to_regclass('web_sessions') IS NOT NULL AS present"
+        ).fetchone()["present"]:
+            conn.execute(
+                "DELETE FROM web_sessions WHERE sess->>'userId'=%s", (user_id,)
+            )
+    app.session_interface.regenerate(session_data())
+    return jsonify(ok=True, message="Contraseña actualizada. Se cerraron las demás sesiones.")
+
+
+@app.delete("/api/auth/account")
+@auth_required
+def delete_account():
+    rejected = same_origin() or rate_limit_auth()
+    if rejected:
+        return rejected
+    body = request_object()
+    password = str(body.get("password") or "")
+    if str(body.get("confirmation") or "") != "ELIMINAR":
+        return jsonify(error="Escribe ELIMINAR para confirmar."), 400
+    user_id = session_data().get("user_id")
+    with pool.connection() as conn:
+        row = conn.execute(
+            "SELECT password_hash FROM app_users WHERE id=%s", (user_id,)
+        ).fetchone()
+    if not row or not verify_password(password, row["password_hash"]):
+        return jsonify(error="La contraseña no es correcta."), 401
+    with pool.connection() as conn:
+        conn.execute(
+            "DELETE FROM kairos_python_sessions WHERE data->>'user_id'=%s", (user_id,)
+        )
+        if conn.execute(
+            "SELECT to_regclass('web_sessions') IS NOT NULL AS present"
+        ).fetchone()["present"]:
+            conn.execute(
+                "DELETE FROM web_sessions WHERE sess->>'userId'=%s", (user_id,)
+            )
+        conn.execute("DELETE FROM app_users WHERE id=%s", (user_id,))
+    session_data().clear()
+    return jsonify(ok=True)
+
+
 @app.get("/api/planner/state")
 @auth_required
 def get_planner_state():
@@ -430,6 +504,8 @@ def put_planner_state():
 
 PUBLIC_FILES = {
     "index.html", "styles.css", "ai-agent.js", "auth-client.js", "app.js", "enhancements.js",
+    "lab.js", "manifest.webmanifest", "service-worker.js", "icon-192.svg", "icon-512.svg",
+    "icon-192.png", "icon-512.png",
     "fonts/inter-variable-latin.woff2", "fonts/poppins-400-latin.woff2",
     "fonts/poppins-500-latin.woff2", "fonts/poppins-600-latin.woff2",
     "fonts/poppins-700-latin.woff2", "fonts/poppins-800-latin.woff2",
@@ -441,7 +517,11 @@ PUBLIC_FILES = {
 def static_file(filename="index.html"):
     if filename not in PUBLIC_FILES:
         return jsonify(error="No encontrado."), 404
-    return send_from_directory(STATIC_DIR, filename)
+    response = send_from_directory(STATIC_DIR, filename)
+    if filename == "service-worker.js":
+        response.headers["Service-Worker-Allowed"] = "/"
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.after_request
@@ -514,7 +594,7 @@ def main():
     pool.open()
     pool.wait(timeout=15)
     initialize_database()
-    logger.info("Electiva de Danzas Python disponible en http://%s:%s", HOST, PORT)
+    logger.info("KAIROS Ciencias de Datos disponible en http://%s:%s", HOST, PORT)
     logger.info("Concurrencia web: Waitress; conexiones PostgreSQL máx.: %s", pool.max_size)
     serve(app, host=HOST, port=PORT, threads=int(os.getenv("WEB_THREADS", "32")))
 

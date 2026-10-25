@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title ELECTIVA DE DANZAS - Iniciador
+title KAIROS - Ciencias de Datos
 where node >nul 2>nul
 if errorlevel 1 (
   echo No encuentro Node.js. Instala Node.js 20 o superior y vuelve a intentarlo.
@@ -33,7 +33,7 @@ if not exist node_modules\express\package.json (
     exit /b 1
   )
 )
-echo Iniciando ELECTIVA DE DANZAS. Manten abierta esta ventana del servidor.
+echo Iniciando KAIROS. Manten abierta esta ventana del servidor.
 echo Cuando veas que el servidor esta listo, abre http://localhost:3000
 call npm.cmd start
 pause

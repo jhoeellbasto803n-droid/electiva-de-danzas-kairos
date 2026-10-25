@@ -1,6 +1,6 @@
-# ELECTIVA DE DANZAS — Organizador académico
+# KAIROS — Organizador de Ciencias de Datos
 
-Aplicación web con registro e inicio de sesión, almacenamiento centralizado en PostgreSQL y datos académicos separados por cuenta. Centraliza actividades, ponderaciones, tiempos estimados y fechas; compara planes explicables y conserva la decisión final en manos del estudiante. Incluye un revisor local de instrucciones y mantiene el agente probabilístico y las integraciones institucionales en preparación.
+Aplicación KAIROS para estudiantes de Ciencias de Datos con registro e inicio de sesión, almacenamiento PostgreSQL separado por cuenta, materias y ejemplos ficticios de Python/pandas, estadística, SQL, aprendizaje automático y visualización. Incluye planificación explicable, bitácora privada de experimentos, exportación CSV, controles de cuenta y modo instalable. El agente de IA y las integraciones institucionales siguen en preparación.
 
 ## Cómo abrirlo
 
@@ -11,7 +11,7 @@ En Windows, inicia `INICIAR-ELECTIVA.bat`. La primera vez completa `.env` cuando
 2. Crea una base de datos llamada `electiva_danzas` (por ejemplo: `psql -U postgres -c "CREATE DATABASE electiva_danzas;"`).
 3. Copia `.env.example` como `.env`; actualiza `DATABASE_URL` y `APP_ORIGIN`. Genera `SESSION_SECRET` con `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
 4. Ejecuta `npm install` y después `npm start`.
-5. Abre `http://localhost:3000` y crea una cuenta. Cada cuenta recibe datos de demostración de danza que puedes retirar desde el resumen.
+5. Abre `http://localhost:3000` y crea una cuenta. Cada cuenta recibe datos ficticios de Ciencia de Datos que puedes retirar desde el resumen. La bitácora permite registrar y exportar experimentos.
 
 La aplicación requiere el servidor para iniciar sesión y sincronizar materias y actividades. No abras `index.html` directamente.
 
@@ -29,7 +29,9 @@ La aplicación requiere el servidor para iniciar sesión y sincronizar materias 
 - Comparar los cinco sistemas de priorización. Un optimizador de capacidad elige la combinación de actividades que cabe antes de sus fechas límite; cada escenario muestra lo incluido y el costo de oportunidad por actividad, sin sumar pesos de materias distintas ni estimar notas perdidas.
 - Plan semanal por día: configura tus horas disponibles, repártelas por igual o vacía la semana. El plan distribuye actividades confirmadas en bloques de máximo 90 minutos y detecta horas que no caben antes de la fecha límite. Puedes saltar desde un bloque al temporizador asociado.
 - Temporizador de concentración con bloques rápidos de 15, 25 y 50 minutos o duración personalizada entre 1 y 240 minutos. Pausa, continúa, reinicia o guarda una sesión; una alarma sonora avisa al terminar y puedes probarla o desactivarla. Puedes asociar la sesión a una actividad; se registran minutos realizados y aparecen en su ficha.
-- Importar calendarios `.ics` y archivos `.csv` desde la vista **Conectar plataformas**.
+- Usar el cuaderno de datos para guardar, editar y eliminar experimentos con pregunta, fuente, método, métrica, resultados, límites y pasos siguientes; exportar la bitácora como CSV.
+- Cambiar la contraseña con verificación de la actual, cerrar sesiones en ambas versiones y eliminar la cuenta con confirmación reforzada.
+- Instalar la interfaz como PWA; necesita conexión para autenticación y sincronización.
 - Exportar o restaurar una copia JSON de actividades, materias, preferencias y sesiones.
 - Módulo `ai-agent.js` reservado para integrar un agente después.
 - Registro e inicio de sesión con contraseñas protegidas mediante `scrypt`, cookie de sesión HTTP-only y sesiones persistidas en PostgreSQL.
@@ -48,9 +50,9 @@ Elige entre cinco criterios: equilibrado, fecha más próxima, mayor ponderació
 
 ## Autenticación y despliegue
 
-El servidor usa Express, sesiones PostgreSQL y una base de datos PostgreSQL compartida. El pool de conexiones y la estructura permiten comenzar con más de 100 cuentas registradas con uso normal, sujeto a los recursos de la base y del servidor. Esto describe la arquitectura inicial; no es una prueba de carga ni garantiza 100 conexiones simultáneas. `planner_data` mantiene un documento JSONB por usuario con límite de 2 MB; para crecer a miles de usuarios o manejar ediciones simultáneas desde varios dispositivos, el siguiente paso es normalizar actividades y materias en tablas y añadir control de conflictos.
+El servidor usa Express, sesiones PostgreSQL y una base de datos PostgreSQL compartida. El pool de conexiones es configurable con DB_POOL_MAX (entre 5 y 100; 30 por defecto) para ajustarlo al plan de PostgreSQL. La aplicación puede guardar más de 100 cuentas; esto no es una prueba de carga ni garantiza 100 conexiones simultáneas. planner_data mantiene un documento JSONB por usuario con límite de 2 MB; para crecer a miles de usuarios o manejar ediciones simultáneas desde varios dispositivos, el siguiente paso es normalizar actividades y materias en tablas y añadir control de conflictos.
 
-Antes de abrir registros al público, configura HTTPS y un `SESSION_SECRET` aleatorio de al menos 32 caracteres; también conviene añadir verificación de correo y recuperación de contraseña. El prototipo no implementa verificación por correo, recuperación ni pagos.
+Antes de abrir registros al público, configura HTTPS y un SESSION_SECRET aleatorio de al menos 32 caracteres. El cambio de contraseña requiere la contraseña actual; todavía no hay verificación de correo ni recuperación por email.
 
 Para desplegar la versión Node.js en Render, usa el Blueprint `../render.yaml` desde la raíz del repositorio. Configura `DATABASE_URL` con la URL interna de una PostgreSQL en Render y conserva el secreto generado por Render. La aplicación exige `APP_ORIGIN` HTTPS al ejecutarse con `NODE_ENV=production`, confía en un solo proxy frontal para reconocer HTTPS, limita los intentos de autenticación, añade cabeceras HTTP de seguridad y marca las respuestas de la API como privadas y no almacenables en caché. En despliegues con dominio propio, actualiza `APP_ORIGIN` para que coincida exactamente con el dominio.
 

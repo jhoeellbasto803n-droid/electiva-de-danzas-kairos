@@ -2,6 +2,14 @@
 
 Este documento resume las etapas que construyeron el proyecto y lo que queda conectado en esta entrega.
 
+## Actualización KAIROS Ciencias de Datos — 25 de octubre de 2026
+
+- Se sustituyeron los datos de demostración de Danzas por materias y actividades ficticias de Python/pandas, estadística, SQL, aprendizaje automático y visualización. Los ejemplos anteriores se actualizan automáticamente solo si no fueron modificados; el resto de los datos personales se conserva.
+- Se agregó un cuaderno de experimentos vinculado a cada cuenta, con campos para pregunta, fuente de datos, método, métrica, resultado, límites y siguiente paso. Los registros se pueden editar, eliminar y exportar como CSV.
+- Se añadieron cambio de contraseña, invalidación de las otras sesiones y eliminación de cuenta con comprobación de contraseña.
+- Se preparó el modo instalable (PWA), que almacena recursos estáticos para abrir la interfaz; el inicio de sesión y los datos privados siguen requiriendo conexión.
+- Se actualizaron las interfaces Node y Python, los CSV de ejemplo y las guías.
+
 1. **Base académica:** se partió de los materiales de tutoría académica y del proyecto sustentado de la electiva de danzas. Se diseñó la app alrededor de materias, actividades, notas de contexto, fechas de entrega y horas estimadas.
 2. **Organización académica:** se añadieron tareas con confirmación manual, filtros, búsqueda, agenda, recomendación de prioridades y cinco sistemas seleccionables de priorización.
 3. **Plan semanal:** se creó la disponibilidad por día, las acciones para repartir o limpiar horas y la propuesta de sesiones de hasta 90 minutos según fechas y carga.

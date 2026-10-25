@@ -36,7 +36,7 @@ function paintTimer(){
  $$("[data-focus-minutes]").forEach(b=>{b.disabled=running||started;b.classList.toggle("selected",Number(b.dataset.focusMinutes)*60===totalSeconds)});
  $("#focus-state").textContent=running?"EN MARCHA":(completedCycle?"BLOQUE COMPLETADO":(started?"EN PAUSA":"LISTO PARA EMPEZAR"));$("#focus-state").classList.toggle("running",running);
  mini.hidden=!running&&(!started||completedCycle);$("#focus-mini-time").textContent=pad(mins)+":"+pad(secs);mini.classList.toggle("is-running",running);
- document.title=running?pad(mins)+":"+pad(secs)+" · En concentración":(completedCycle?"¡Bloque completado! · Electiva de Danzas":"Electiva de Danzas · Organizador académico");
+ document.title=running?pad(mins)+":"+pad(secs)+" · En concentración":(completedCycle?"¡Bloque completado! · KAIROS · Ciencias de Datos":"KAIROS · Ciencias de Datos · Organizador académico");
 }
 function setDuration(minutes){if(running||remaining<totalSeconds)return;const n=Math.round(Number(minutes));if(!Number.isFinite(n)||n<1||n>240){app().toast("Elige entre 1 y 240 minutos.");return}totalSeconds=n*60;remaining=totalSeconds;completedCycle=false;$("#focus-custom-minutes").value=n;state().settings.focusMinutes=n;app().save();$("#focus-message").textContent="Bloque preparado para "+n+" minutos.";paintTimer()}
 async function prepareAudio(){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;if(!alarmContext)alarmContext=new Audio();if(alarmContext.state==="suspended")await alarmContext.resume();return alarmContext.state==="running"}
@@ -143,7 +143,7 @@ function bindImport(){
   });
   app().save();app().render();staged=[];$("#calendar-file").value="";$("#import-preview").hidden=true;$("#import-confirm").hidden=true;$("#import-message").textContent="Importadas "+count+" actividad(es). Completa los datos y confirma cada una en Actividades → Por confirmar.";app().toast(count+" actividad(es) importadas para revisar.");
  });
- $("#import-backup").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>2*1024*1024)throw Error("La copia supera el límite de 2 MB.");const data=JSON.parse(await f.text());if(!Array.isArray(data.tasks)||!Array.isArray(data.subjects))throw Error("El archivo no parece ser una copia válida de ELECTIVA DE DANZAS.");if(!confirm("La copia reemplazará las materias, actividades y sesiones guardadas. ¿Continuar?"))return;data.settings=data.settings||{availableHours:5,reminders:true,changes:true};data.focusSessions=Array.isArray(data.focusSessions)?data.focusSessions:[];app().replaceState(data);app().toast("Copia restaurada en tu cuenta.")}catch(err){app().toast(err.message||"No pude leer esa copia.")}finally{e.target.value=""}});
+ $("#import-backup").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>2*1024*1024)throw Error("La copia supera el límite de 2 MB.");const data=JSON.parse(await f.text());if(!Array.isArray(data.tasks)||!Array.isArray(data.subjects))throw Error("El archivo no parece ser una copia válida de KAIROS.");if(!confirm("La copia reemplazará las materias, actividades y sesiones guardadas. ¿Continuar?"))return;data.settings=data.settings||{availableHours:5,reminders:true,changes:true};data.focusSessions=Array.isArray(data.focusSessions)?data.focusSessions:[];data.labEntries=Array.isArray(data.labEntries)?data.labEntries:[];app().replaceState(data);app().toast("Copia restaurada en tu cuenta.")}catch(err){app().toast(err.message||"No pude leer esa copia.")}finally{e.target.value=""}});
 }
 function bindSubjectEdit(){
  $("#add-subject").addEventListener("click",()=>{$("#subject-id").value="";$("#subject-modal-title").textContent="Nueva materia"},true);
@@ -229,7 +229,7 @@ function exportPlanCsv(){
   const description="Materia: "+subject+"\nDuración planificada: "+fmtHours(slot.hours)+" h\nFecha límite registrada: "+(slot.task.due||"sin fecha")+"\nHorario propuesto: verifica que esta hora te sirva antes de importarlo.";
   rows.push([slot.task.title,calendarDate(begin),calendarTime(begin),calendarDate(end),calendarTime(end),"False",description,"","True"]);cursor+=duration+(index<day.slots.length-1?10:0);count++;
  })});
- const blob=new Blob(["\uFEFF"+rows.map(row=>row.map(csvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}),link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="horario-electiva-danzas-"+dateKey(new Date())+".csv";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1500);app().toast("CSV descargado con "+count+" bloque(s). Puedes importarlo a Google Calendar.");
+ const blob=new Blob(["\uFEFF"+rows.map(row=>row.map(csvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}),link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="horario-kairos-ciencias-datos-"+dateKey(new Date())+".csv";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1500);app().toast("CSV descargado con "+count+" bloque(s). Puedes importarlo a Google Calendar.");
 }
 function rebalanceWeek(total){
  const st=state(),map=defaultWeekHours(total);

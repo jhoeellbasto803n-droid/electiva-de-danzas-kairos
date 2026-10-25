@@ -1,8 +1,8 @@
 {
-  "name": "electiva-de-danzas",
-  "version": "2.1.0",
+  "name": "kairos-ciencias-datos",
+  "version": "2.2.0",
   "private": true,
-  "description": "Organizador académico con autenticación y almacenamiento por cuenta",
+  "description": "Organizador de Ciencias de Datos con autenticación, PostgreSQL y cuaderno de experimentos",
   "scripts": {
     "start": "node server.js"
   },
