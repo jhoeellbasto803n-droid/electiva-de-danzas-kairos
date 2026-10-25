@@ -1,6 +1,6 @@
 # ELECTIVA DE DANZAS — Organizador académico
 
-Aplicación web con registro e inicio de sesión, almacenamiento centralizado en PostgreSQL y datos académicos separados por cuenta. Centraliza actividades, ponderaciones, tiempos estimados y fechas; compara planes explicables y conserva la decisión final en manos del estudiante. El agente de IA y las integraciones institucionales quedan para una etapa posterior.
+Aplicación web con registro e inicio de sesión, almacenamiento centralizado en PostgreSQL y datos académicos separados por cuenta. Centraliza actividades, ponderaciones, tiempos estimados y fechas; compara planes explicables y conserva la decisión final en manos del estudiante. Incluye un revisor local de instrucciones y mantiene el agente probabilístico y las integraciones institucionales en preparación.
 
 ## Cómo abrirlo
 
@@ -22,10 +22,11 @@ La aplicación requiere el servidor para iniciar sesión y sincronizar materias 
 - Cinco sistemas de priorización seleccionables y persistentes. La selección reorganiza las sugerencias, el puntaje y la distribución semanal.
 - Crear, editar y eliminar materias, incluida la nota actual usada como contexto.
 - Crear, editar, completar y eliminar tareas, talleres, exámenes y sesiones de estudio.
-- Guardar fechas, ponderaciones, horas, opcionalidad y texto de origen.
+- Guardar fechas, ponderaciones, horas, opcionalidad, tipo normalizado y texto de origen.
+- Analizar localmente instrucciones para sugerir tipos, fechas explícitas, porcentajes y horas; advertir ante varias fechas, varios pesos o señales contradictorias como «opcional» y «vital». Ninguna sugerencia se guarda automáticamente.
 - Confirmar manualmente fechas y ponderaciones antes de usar una actividad en la priorización.
 - Ver agenda, pendientes, búsqueda, filtros y carga de las próximas jornadas.
-- Comparar los cinco sistemas de priorización. Cada escenario muestra qué actividades caben completas, cuánto tiempo ocuparían y cuáles quedarían fuera. El resumen de carga semanal solo suma actividades confirmadas.
+- Comparar los cinco sistemas de priorización. Un optimizador de capacidad elige la combinación de actividades que cabe antes de sus fechas límite; cada escenario muestra lo incluido y el costo de oportunidad por actividad, sin sumar pesos de materias distintas ni estimar notas perdidas.
 - Plan semanal por día: configura tus horas disponibles, repártelas por igual o vacía la semana. El plan distribuye actividades confirmadas en bloques de máximo 90 minutos y detecta horas que no caben antes de la fecha límite. Puedes saltar desde un bloque al temporizador asociado.
 - Temporizador de concentración con bloques rápidos de 15, 25 y 50 minutos o duración personalizada entre 1 y 240 minutos. Pausa, continúa, reinicia o guarda una sesión; una alarma sonora avisa al terminar y puedes probarla o desactivarla. Puedes asociar la sesión a una actividad; se registran minutos realizados y aparecen en su ficha.
 - Importar calendarios `.ics` y archivos `.csv` desde la vista **Conectar plataformas**.
@@ -43,7 +44,7 @@ Las actividades importadas quedan en **Por confirmar**. Si el archivo no contien
 
 ## Lógica y límites
 
-Elige entre cinco criterios: equilibrado, fecha más próxima, mayor ponderación, tareas breves primero o materia que necesita apoyo. La elección modifica las recomendaciones, el puntaje y el orden del plan; los escenarios comparan qué cabe en tu disponibilidad. Son heurísticas configurables, no fórmulas validadas ni predicciones de calificaciones. El plan reparte tareas confirmadas entre las horas que declaras para cada día, con sesiones de máximo 90 minutos. Puedes editar cada día, repartir las horas o vaciar la semana. Es una propuesta y no reserva horas reales en un calendario. Los escenarios no suman porcentajes de materias distintas como si fueran una sola nota.
+Elige entre cinco criterios: equilibrado, fecha más próxima, mayor ponderación, tareas breves primero o materia que necesita apoyo. La elección modifica las recomendaciones, el puntaje y el orden del plan. El revisor local usa patrones explícitos y no afirma resolver instrucciones complejas por sí solo. El optimizador selecciona una combinación de actividades completas que maximiza la suma del índice activo dentro de la capacidad disponible y las fechas límite; no inventa horas para hacer viable un plan imposible. Son heurísticas configurables, no fórmulas validadas ni predicciones de calificaciones. El peso mostrado corresponde a cada corte o materia; no se suma entre materias ni se convierte en una nota perdida. Las horas estimadas se distribuyen en sesiones de máximo 90 minutos. Puedes editar cada día, repartir las horas o vaciar la semana. Es una propuesta y no reserva horas reales en un calendario. Los escenarios no suman porcentajes de materias distintas como si fueran una sola nota.
 
 ## Autenticación y despliegue
 
@@ -53,7 +54,7 @@ Antes de abrir registros al público, configura HTTPS y un `SESSION_SECRET` alea
 
 ## Agente de IA futuro
 
-`ai-agent.js` es el punto de extensión. La arquitectura prevista separa: (1) extracción probabilística de texto; (2) reglas deterministas para validar fechas, ponderaciones y ambigüedad; y (3) optimización y escenarios. Las extracciones inciertas deben requerir confirmación del estudiante. El prototipo no se conecta a plataformas en vivo, no hace trabajos y no los entrega. Las tres materias, sus notas y las ponderaciones y fechas de ejemplo son inventadas para mostrar la interfaz; confirma todos esos datos con tu docente antes de usarlos.
+`ai-agent.js` ofrece por ahora una revisión determinista local con expresiones y reglas básicas: sugiere candidatos, muestra contexto y advierte ambigüedades; no pretende comprender semántica compleja ni enviar texto fuera del navegador. La arquitectura futura separará: (1) extracción probabilística de texto; (2) reglas deterministas para validar fechas, ponderaciones y contradicciones; y (3) optimización y escenarios. Las extracciones inciertas requieren confirmación del estudiante. El prototipo no se conecta a plataformas en vivo, no hace trabajos y no los entrega. Las tres materias, sus notas y las ponderaciones y fechas de ejemplo son inventadas para mostrar la interfaz; confirma todos esos datos con tu docente antes de usarlos.
 
 
 

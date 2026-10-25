@@ -138,7 +138,7 @@ function bindImport(){
   const st=state(),known=new Set(st.tasks.map(t=>t.title.toLowerCase()+"|"+t.due));let count=0;
   staged.forEach(e=>{const key=e.title.toLowerCase()+"|"+e.due;if(known.has(key))return;known.add(key);
    const missing=e.weight===null||!isFinite(e.weight);
-   st.tasks.push({id:app().uid(),title:e.title,subjectId:sid,due:e.due,weight:missing?0:e.weight,hours:e.hours&&isFinite(e.hours)?e.hours:1,optional:false,done:false,confirmed:false,imported:true,source:"Importado desde "+e.fileName+". Fecha por verificar."+(missing?" Ponderación sin identificar; regístrala manualmente.":"")+((e.description)?" "+e.description:"")+(e.sourceUrl?" "+e.sourceUrl:"")});
+   st.tasks.push({id:app().uid(),title:e.title,subjectId:sid,category:"TAR",due:e.due,weight:missing?0:e.weight,hours:e.hours&&isFinite(e.hours)?e.hours:1,optional:false,done:false,confirmed:false,imported:true,source:"Importado desde "+e.fileName+". Fecha por verificar."+(missing?" Ponderación sin identificar; regístrala manualmente.":"")+((e.description)?" "+e.description:"")+(e.sourceUrl?" "+e.sourceUrl:"")});
    count++;
   });
   app().save();app().render();staged=[];$("#calendar-file").value="";$("#import-preview").hidden=true;$("#import-confirm").hidden=true;$("#import-message").textContent="Importadas "+count+" actividad(es). Completa los datos y confirma cada una en Actividades → Por confirmar.";app().toast(count+" actividad(es) importadas para revisar.");
@@ -168,6 +168,19 @@ function dateDiff(a,b){
  return Math.round((Date.UTC(y.getFullYear(),y.getMonth(),y.getDate())-Date.UTC(x.getFullYear(),x.getMonth(),x.getDate()))/86400000);
 }
 function fmtHours(n){return Number(n.toFixed(2)).toLocaleString("es-CO",{maximumFractionDigits:2})}
+function optimizeDeadlineTasks(tasks,capacity,base,rank){
+ const daySlots=capacity.map(hours=>Math.floor(Math.max(0,Number(hours)||0)*4+1e-8)),maxSlots=daySlots.reduce((sum,n)=>sum+n,0),sorted=tasks.slice().sort((a,b)=>dateDiff(base,new Date(a.due))-dateDiff(base,new Date(b.due))||rank(b)-rank(a));
+ const dp=Array(maxSlots+1).fill(-Infinity),choices=[];dp[0]=0;
+ for(let i=0;i<sorted.length;i++){
+  const task=sorted[i],dueIndex=Math.max(0,Math.min(6,dateDiff(base,new Date(task.due)))),allowed=daySlots.slice(0,dueIndex+1).reduce((sum,n)=>sum+n,0),cost=Math.max(1,Math.ceil((Number(task.hours)||.25)*4-1e-8)),value=Math.max(0,Number(rank(task))||0),chosen=new Uint8Array(maxSlots+1);
+  for(let space=allowed;space>=cost;space--){if(dp[space-cost]===-Infinity)continue;const proposal=dp[space-cost]+value;if(proposal>dp[space]+1e-9){dp[space]=proposal;chosen[space]=1}}
+  choices.push(chosen);
+ }
+ let best=0;for(let space=1;space<=maxSlots;space++)if(dp[space]>dp[best]+1e-9)best=space;
+ const selected=new Set();let space=best;
+ for(let i=sorted.length-1;i>=0;i--){if(choices[i][space]){selected.add(sorted[i]);space-=Math.max(1,Math.ceil((Number(sorted[i].hours)||.25)*4-1e-8))}}
+ return selected;
+}
 function renderPlan(){
  ensureWeekHours();
  const st=state(),hours=st.settings.weekdayHours,base=new Date();base.setHours(0,0,0,0);
@@ -177,29 +190,22 @@ function renderPlan(){
  $("#plan-total-hours").textContent=fmtHours(total)+" h / 7 días";
  const dayLabels=dates.map(d=>new Intl.DateTimeFormat("es-CO",{weekday:"short",day:"numeric",month:"short"}).format(d));
  $("#plan-days").innerHTML=dates.map((d,i)=>'<label class="plan-day-setting"><span>'+escapeHtml(dayLabels[i])+'</span><span class="plan-hour-control"><input type="number" min="0" max="24" step=".5" value="'+(Number(hours[d.getDay()])||0)+'" data-day-hours="'+d.getDay()+'" aria-label="Horas disponibles el '+escapeHtml(dayLabels[i])+'"> <small>horas</small></span></label>').join("");
- const pending=st.tasks.filter(t=>!t.done),unconfirmed=pending.filter(t=>!t.confirmed).length;
- const tasks=pending.filter(t=>t.confirmed&&t.due&&dateDiff(base,new Date(t.due))<=6);
- tasks.sort((x,y)=>app().priority(y)-app().priority(x)||new Date(x.due)-new Date(y.due));
- const capacity=dates.map(d=>Number(hours[d.getDay()])||0),left=capacity.slice(),slots=dates.map(()=>[]);
+ const pending=st.tasks.filter(t=>!t.done),unconfirmed=pending.filter(t=>!t.confirmed).length,overdue=pending.filter(t=>t.confirmed&&t.due&&dateDiff(base,new Date(t.due))<0);
+ const tasks=pending.filter(t=>t.confirmed&&t.due&&dateDiff(base,new Date(t.due))>=0&&dateDiff(base,new Date(t.due))<=6);
+ const capacity=dates.map(d=>Number(hours[d.getDay()])||0),left=capacity.slice(),slots=dates.map(()=>[]),selected=optimizeDeadlineTasks(tasks,capacity,base,t=>app().priority(t));
+ const planned=tasks.filter(t=>selected.has(t)).sort((a,b)=>dateDiff(base,new Date(a.due))-dateDiff(base,new Date(b.due))||app().priority(b)-app().priority(a));
  planExportDays=dates.map((date,i)=>({date,slots:slots[i]}));
- const outstanding=[];
- tasks.forEach(t=>{
-  const dueIndex=Math.max(0,Math.min(6,dateDiff(base,new Date(t.due))));
-  let rem=Math.max(0,Number(t.hours)||0);
-  for(let i=0;i<=dueIndex&&rem>.001;i++){
-   while(left[i]>.001&&rem>.001){
-    const block=Math.min(1.5,left[i],rem);
-    slots[i].push({task:t,hours:block});left[i]-=block;rem-=block;
-   }
-  }
-  if(rem>.001)outstanding.push({task:t,hours:rem});
+ planned.forEach(t=>{
+  const dueIndex=Math.max(0,Math.min(6,dateDiff(base,new Date(t.due))));let rem=Math.max(0,Number(t.hours)||.25);
+  for(let i=0;i<=dueIndex&&rem>.001;i++){while(left[i]>.001&&rem>.001){const block=Math.min(1.5,left[i],rem);slots[i].push({task:t,hours:block});left[i]-=block;rem-=block}}
  });
+ const outstanding=tasks.filter(t=>!selected.has(t)).map(task=>({task,hours:Number(task.hours)||.25}));
  const remaining=outstanding.reduce((n,x)=>n+x.hours,0);
  $("#plan-task-count").textContent=tasks.length+" actividad(es) · "+fmtHours(tasks.reduce((n,t)=>n+(Number(t.hours)||0),0))+" h estimadas";
  const status=$("#plan-status");
- if(!tasks.length)status.innerHTML='<b>Una semana más ligera</b><span>No hay actividades confirmadas con fecha de entrega en los próximos 7 días.'+(unconfirmed?' '+unconfirmed+' actividad(es) por confirmar no se incluyen.':'')+'</span><button class="outline" data-go="tasks">Revisar actividades →</button>';
- else if(remaining>.001)status.innerHTML='<b>El tiempo disponible no alcanza todavía</b><span>Quedan '+fmtHours(remaining)+' h estimadas sin ubicar. Revisa tus horas, divide el trabajo o conversa con tu docente sobre prioridades.'+(unconfirmed?' '+unconfirmed+' actividad(es) por confirmar quedan fuera.':'')+'</span><button class="outline" data-go="tasks">Revisar actividades →</button>';
- else status.innerHTML='<b>Las actividades confirmadas caben en tu disponibilidad</b><span>El criterio “'+escapeHtml(app().priorityModes[state().settings.priorityMode]||"Equilibrado")+'” organiza la propuesta. Ajusta cualquier día para reflejar tu semana real.'+(unconfirmed?' '+unconfirmed+' actividad(es) por confirmar quedan fuera.':'')+'</span>';
+ if(!tasks.length)status.innerHTML='<b>Una semana más ligera</b><span>No hay actividades confirmadas con fecha de entrega en los próximos 7 días.'+(overdue.length?' '+overdue.length+' actividad(es) vencidas requieren que revises la fecha.':'')+(unconfirmed?' '+unconfirmed+' actividad(es) por confirmar no se incluyen.':'')+'</span><button class="outline" data-go="tasks">Revisar actividades →</button>';
+ else if(remaining>.001)status.innerHTML='<b>Algunas actividades no caben antes de su fecha</b><span>'+outstanding.length+' actividad(es), con '+fmtHours(remaining)+' h estimadas, quedan fuera de esta capacidad. Compara criterios, horas y fechas; ninguna entrega se reprograma automáticamente.'+(overdue.length?' '+overdue.length+' actividad(es) vencidas requieren revisión.':'')+(unconfirmed?' '+unconfirmed+' actividad(es) por confirmar quedan fuera.':'')+'</span><button class="outline" data-go="tasks">Revisar actividades →</button>';
+ else status.innerHTML='<b>Las actividades seleccionadas caben antes de sus fechas</b><span>El criterio “'+escapeHtml(app().priorityModes[state().settings.priorityMode]||"Equilibrado")+'” elige una combinación que respeta las horas declaradas. Ajusta cualquier día para reflejar tu semana real.'+(overdue.length?' '+overdue.length+' actividad(es) vencidas requieren revisión.':'')+(unconfirmed?' '+unconfirmed+' actividad(es) por confirmar quedan fuera.':'')+'</span>';
  $("#plan-grid").innerHTML=dates.map((d,i)=>{
   const used=capacity[i]-left[i],items=slots[i].length?slots[i].map(s=>'<article class="plan-slot"><div><b>'+escapeHtml(s.task.title)+'</b><small>'+escapeHtml(st.subjects.find(x=>x.id===s.task.subjectId)?.name||"Materia")+' · '+fmtHours(s.hours)+' h</small></div><button class="mini" data-start-task="'+escapeHtml(s.task.id)+'">Enfocarme</button></article>').join(""):'<div class="plan-free">'+(capacity[i]?'Día libre para adelantar o descansar.':'Aún no asignaste horas disponibles.')+'</div>';
   return '<section class="card plan-day-card"><div class="plan-day-head"><div><small>DÍA '+(i+1)+'</small><h3>'+escapeHtml(dayLabels[i])+'</h3></div><strong>'+fmtHours(used)+' <small>/ '+fmtHours(capacity[i])+' h</small></strong></div><div class="plan-bar"><i style="width:'+(capacity[i]?Math.min(100,used/capacity[i]*100):0)+'%"></i></div><div class="plan-slots">'+items+'</div></section>';

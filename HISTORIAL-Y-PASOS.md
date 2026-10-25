@@ -11,8 +11,10 @@ Este documento resume las etapas que construyeron el proyecto y lo que queda con
 7. **Datos y plataformas:** se incorporaron importación manual de archivos `.ics` y `.csv`, revisión de los datos antes de priorizar y copia/restauración JSON.
 8. **Exportación del horario:** el plan semanal puede descargarse como CSV para abrir en Excel o importar a Google Calendar. Se elige la hora inicial; las sesiones se secuencian con pausas breves. No es una sincronización en vivo.
 9. **Dos servidores:** se conservó la implementación Node.js/Express y se creó una implementación Python/Waitress, ambas compatibles con PostgreSQL y ejecutables en Windows con sus archivos `.bat`.
-10. **Preparación para IA:** se dejó `ai-agent.js` como punto de extensión. No hay un agente conectado ni se envía información académica a un proveedor de IA.
+10. **Preparación para IA:** se dejó `ai-agent.js` como punto de extensión. No hay un modelo probabilístico ni proveedor de IA conectado; el análisis actual usa reglas locales y no transmite información académica.
 11. **Preparación de publicación:** se documentaron requisitos, configuración y pasos de inicio; se añadieron CSV de prueba y reglas de Git para excluir secretos, dependencias, cachés y bases locales.
+12. **Revisión de los cuatro documentos del proyecto:** se normalizaron nueve tipos de actividad, se añadió un revisor local de texto para extraer candidatos y señalar ambigüedad, y se reforzó la confirmación humana antes de usar datos.
+13. **Optimización explicable:** los escenarios ahora seleccionan la combinación de actividades que mejor cabe según el criterio activo y la capacidad disponible; muestran por actividad qué queda fuera, sin calcular una nota perdida ficticia. La mejora se comparte entre Node.js y Python.
 
 ## Pendiente para integraciones institucionales
 

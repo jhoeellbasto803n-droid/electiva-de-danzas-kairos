@@ -13,14 +13,16 @@ Organizador académico para planear actividades, materias y sesiones de estudio 
 
 - Registro e inicio de sesión por cuenta; cada usuario guarda sus propios datos en PostgreSQL.
 - Materias con nota de contexto y actividades con fecha, ponderación, horas estimadas y confirmación manual.
-- Cinco sistemas de priorización y preferencias de tema claro/oscuro.
+- Cinco sistemas de priorización con categorías normalizadas (INF, ACT, TAR, TAL, QUI, EXP, PRO, PAR y FIN), además de preferencias de tema claro/oscuro.
+- Revisión local de instrucciones: propone candidatos de tipo, fechas, porcentajes y horas; señala contradicciones como «opcional» y «vital». Las propuestas requieren confirmación manual y no se envían a servicios externos.
+- Comparación de escenarios con una optimización por capacidad y fecha límite; muestra por actividad qué cabe y qué queda pendiente sin inventar una nota perdida.
 - Plan semanal editable por día, que distribuye actividades confirmadas en sesiones de hasta 90 minutos.
 - Exportación del plan semanal como CSV con encabezados compatibles con la importación de Google Calendar. La persona elige la hora de inicio; el plan se ordena en secuencia con pausas breves.
 - Temporizador de concentración configurable con pausa, continuación y alarma sonora.
 - Importación local de calendarios `.ics` y actividades `.csv`; copia/restauración de datos.
-- Punto de extensión preparado para un agente de IA futuro; el agente todavía no está conectado.
+- Revisor local de instrucciones disponible; el modelo probabilístico futuro y las conexiones institucionales todavía no están conectados.
 
-La integración con Google Calendar es por archivo CSV. Moodle, Canvas, Teams u otros portales institucionales no están conectados en vivo: eso requiere APIs oficiales y autorización de cada institución.
+La integración con Google Calendar es por archivo CSV. El revisor de texto es determinista y local; no es todavía un modelo probabilístico ni una conexión institucional. Moodle, Canvas, Teams u otros portales institucionales no están conectados en vivo: eso requiere APIs oficiales y autorización de cada institución.
 
 ## Requisitos
 

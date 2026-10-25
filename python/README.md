@@ -1,6 +1,6 @@
 # KAIROS — Electiva de Danzas (Python)
 
-Version Python de la aplicación académica. Conserva la interfaz web, el planificador por cuenta, las materias y actividades, el cronómetro con alarma, los modos de priorización y el tema oscuro. El espacio del agente de IA queda preparado, sin activarlo todavía.
+Version Python de la aplicación académica. Conserva la interfaz web, el planificador por cuenta, las materias y actividades, el cronómetro con alarma, los modos de priorización y el tema oscuro. Incluye el mismo revisor local de instrucciones que la versión Node.js; no es un modelo de IA conectado ni transmite texto.
 
 El servidor Python sustituye a Express y conserva las rutas `/api` que usa la interfaz. Las cuentas y los planes se guardan en PostgreSQL usando las mismas tablas `app_users` y `planner_data`; la sesión del servidor Python usa su propia tabla `kairos_python_sessions`. La versión Node puede seguir en la misma carpeta original y usar la misma base de datos. Esta copia abre por defecto en el puerto **3001**, para que las dos versiones puedan convivir.
 
@@ -58,6 +58,10 @@ Waitress ejecuta la aplicación con hilos y el pool de PostgreSQL reutiliza cone
 - `.env.example`: plantilla de configuración; duplica como `.env` para uso local.
 - `.vscode/launch.json`: configuración para depurar con VS Code.
 - `INICIAR-PYTHON.bat`: prepara las dependencias la primera vez y ejecuta la app.
+
+## Revisión de instrucciones y prioridad
+
+En el editor de actividades puedes analizar localmente texto copiado desde un aula virtual. Se muestran candidatos de fechas, porcentajes, horas y categorías normalizadas; varias fechas, pesos o expresiones opuestas quedan señaladas para que revises la fuente. Seleccionar un candidato solo lo copia al formulario; todavía debes verificar y confirmar. El planificador compara combinaciones que caben según el modo de prioridad activo y el tiempo disponible, sin estimar una nota perdida ni sumar porcentajes de materias distintas.
 
 ## Exportar el horario semanal
 
