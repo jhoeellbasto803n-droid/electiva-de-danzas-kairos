@@ -55,7 +55,6 @@ En producción Python confía un solo proxy frontal para obtener la IP cliente y
 
 - `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API y servidor Waitress.
 - Interfaz web compartida con Node, con cuaderno de datos, exportación CSV y modo instalable.
-- Interfaz web compartida con Node, con cuaderno de datos, exportación CSV y modo instalable.
 - `requirements.txt`: dependencias Python.
 - `.env.example`: plantilla de configuración; duplica como `.env` para uso local.
 - `.vscode/launch.json`: configuración para depurar con VS Code.
@@ -63,7 +62,11 @@ En producción Python confía un solo proxy frontal para obtener la IP cliente y
 
 ## Revisión de instrucciones y prioridad
 
-En el editor de actividades puedes analizar localmente texto copiado desde un aula virtual. Se muestran candidatos de fechas, porcentajes, horas y categorías normalizadas; varias fechas, pesos o expresiones opuestas quedan señaladas para que revises la fuente. Seleccionar un candidato solo lo copia al formulario; todavía debes verificar y confirmar. El planificador compara combinaciones que caben según el modo de prioridad activo y el tiempo disponible, sin estimar una nota perdida ni sumar porcentajes de materias distintas.
+En el editor de actividades puedes analizar localmente texto copiado desde un aula virtual. Se muestran candidatos de fechas, porcentajes, horas y categorías normalizadas; varias fechas, pesos o expresiones opuestas quedan señaladas para que revises la fuente. Seleccionar un candidato solo lo copia al formulario; todavía debes verificar y confirmar. El planificador compara combinaciones que caben según el criterio seleccionado y el tiempo disponible, sin estimar una nota perdida ni sumar porcentajes de materias distintas. El plan semanal también admite actividades confirmadas sin fecha límite, sin asignarles una fecha artificial.
+
+## Prioridad y estimaciones
+
+La pantalla Actividades explica los componentes I, U y W, el resultado P y la versión de la fórmula. Si falta una fecha o una ponderación confirmada, no asigna un valor ficticio: excluye el componente y renormaliza los pesos restantes. Las horas sugeridas usan el catálogo de tipos y se ajustan con sesiones de enfoque completadas, acercándose gradualmente al historial personal. Las alertas se muestran dentro de la aplicación; no envían correo ni notificaciones push.
 
 ## Exportar el horario semanal
 

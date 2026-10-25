@@ -13,9 +13,9 @@ Entorno de estudio para estudiantes de Ciencia de Datos: planifica materias y en
 
 - Registro e inicio de sesión por cuenta; cada usuario guarda sus propios datos en PostgreSQL.
 - Materias con nota de contexto y actividades con fecha, ponderación, horas estimadas y confirmación manual.
-- Cinco sistemas de priorización con categorías normalizadas (INF, ACT, TAR, TAL, QUI, EXP, PRO, PAR y FIN), además de preferencias de tema claro/oscuro.
+- Índice oficial explicable KAIROS-P-1.0 y cinco criterios seleccionables para ordenar el plan; la fórmula P no cambia cuando se elige otro criterio. Categorías normalizadas: INF, ACT, TAR, TAL, QUI, EXP, PRO, PAR y FIN.
 - Revisión local de instrucciones: propone candidatos de tipo, fechas, porcentajes y horas; señala contradicciones como «opcional» y «vital». Las propuestas requieren confirmación manual y no se envían a servicios externos.
-- Comparación de escenarios con una optimización por capacidad y fecha límite; muestra por actividad qué cabe y qué queda pendiente sin inventar una nota perdida.
+- Comparación de escenarios con una optimización por capacidad y fecha límite; muestra por actividad qué cabe y qué queda pendiente sin inventar una nota perdida. Las actividades sin fecha o ponderación conservan el dato como desconocido; el índice renormaliza solo componentes disponibles.
 - Plan semanal editable por día, que distribuye actividades confirmadas en sesiones de hasta 90 minutos.
 - Exportación del plan semanal como CSV con encabezados compatibles con la importación de Google Calendar. La persona elige la hora de inicio; el plan se ordena en secuencia con pausas breves.
 - Temporizador de concentración configurable con pausa, continuación y alarma sonora.

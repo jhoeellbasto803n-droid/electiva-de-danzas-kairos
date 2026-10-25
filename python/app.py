@@ -503,7 +503,7 @@ def put_planner_state():
 
 
 PUBLIC_FILES = {
-    "index.html", "styles.css", "ai-agent.js", "auth-client.js", "app.js", "enhancements.js",
+    "index.html", "styles.css", "ai-agent.js", "priority-engine.js", "auth-client.js", "app.js", "enhancements.js",
     "lab.js", "manifest.webmanifest", "service-worker.js", "icon-192.svg", "icon-512.svg",
     "icon-192.png", "icon-512.png",
     "fonts/inter-variable-latin.woff2", "fonts/poppins-400-latin.woff2",

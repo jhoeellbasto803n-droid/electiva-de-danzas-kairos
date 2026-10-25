@@ -6,15 +6,15 @@
   "use strict";
   const fold = value => String(value || "").toLocaleLowerCase("es-CO").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const catalog = {
-    INF: { label: "Información o aviso", level: 1 },
-    ACT: { label: "Actividad de clase", level: 2 },
-    TAR: { label: "Tarea", level: 3 },
-    TAL: { label: "Taller", level: 3 },
-    QUI: { label: "Quiz o evaluación corta", level: 4 },
-    EXP: { label: "Exposición", level: 4 },
-    PRO: { label: "Proyecto", level: 4 },
-    PAR: { label: "Parcial o examen", level: 5 },
-    FIN: { label: "Entrega final", level: 5 }
+    INF: { label: "Información o aviso", level: 1, priorHours: 0.25 },
+    ACT: { label: "Actividad de clase", level: 2, priorHours: 1 },
+    TAR: { label: "Tarea", level: 3, priorHours: 2 },
+    TAL: { label: "Taller", level: 3, priorHours: 3 },
+    QUI: { label: "Quiz o evaluación corta", level: 4, priorHours: 1.5 },
+    EXP: { label: "Exposición", level: 4, priorHours: 4 },
+    PRO: { label: "Proyecto", level: 4, priorHours: 8 },
+    PAR: { label: "Parcial o examen", level: 5, priorHours: 4 },
+    FIN: { label: "Entrega final", level: 5, priorHours: 8 }
   };
   const typeRules = [
     ["FIN", /\b(entrega final|proyecto final|trabajo final|examen final)\b/],

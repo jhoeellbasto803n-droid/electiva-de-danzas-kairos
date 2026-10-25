@@ -29,3 +29,11 @@ Este documento resume las etapas que construyeron el proyecto y lo que queda con
 ## Pendiente para integraciones institucionales
 
 La conexión directa a Moodle, Canvas, Teams u otros sistemas requiere identificar la plataforma y versión, confirmar que la institución permite acceso por API y configurar OAuth o credenciales oficiales. Hasta que eso exista, la transferencia es manual mediante archivos de calendario.
+
+## 2026-10 — Actualización con documentación académica
+
+- Se incorpora KAIROS-P-1.0: índice explicable por importancia, urgencia y ponderación confirmada; los componentes ausentes no se inventan y el cálculo renormaliza los disponibles.
+- Se muestran niveles, componentes y revisión de supuestos. Los cinco criterios ordenan el plan de forma independiente del índice fijo.
+- El plan reconoce actividades sin fecha, estima horas desde el catálogo y ajusta los valores con sesiones personales registradas.
+- Se añaden alertas dentro de la app, filtros por materia/tipo y estados reales de integración institucional; las notificaciones externas y conectores siguen pendientes de autorización.
+- Se sincronizan las versiones Node.js, Python y Render con la misma interfaz.
