@@ -4,7 +4,7 @@ Este documento resume las etapas que construyeron el proyecto y lo que queda con
 
 ## Actualización KAIROS Ciencias de Datos — 25 de octubre de 2026
 
-- Se sustituyeron los datos de demostración de Danzas por materias y actividades ficticias de Python/pandas, estadística, SQL, aprendizaje automático y visualización. Los ejemplos anteriores se actualizan automáticamente solo si no fueron modificados; el resto de los datos personales se conserva.
+- Se sustituyeron los datos de demostración de Danzas por materias y actividades ficticias de Python/pandas, estadística, SQL, aprendizaje automático y visualización. Las cuentas vacías reciben el ejemplo una sola vez; las muestras antiguas solo se actualizan si no fueron modificadas. El resto de los datos personales se conserva.
 - Se agregó un cuaderno de experimentos vinculado a cada cuenta, con campos para pregunta, fuente de datos, método, métrica, resultado, límites y siguiente paso. Los registros se pueden editar, eliminar y exportar como CSV.
 - Se añadieron cambio de contraseña, invalidación de las otras sesiones y eliminación de cuenta con comprobación de contraseña.
 - Se preparó el modo instalable (PWA), que almacena recursos estáticos para abrir la interfaz; el inicio de sesión y los datos privados siguen requiriendo conexión.
