@@ -1,6 +1,6 @@
 # KAIROS — Ciencias de Datos (Python)
 
-Versión Python del organizador KAIROS para estudiantes de Ciencias de Datos. Incluye materias y actividades ficticias de Python/pandas, estadística, bases de datos, aprendizaje automático y visualización; planificador por cuenta, cronómetro con alarma, cinco modos de priorización, cuaderno privado de experimentos, controles de cuenta y aplicación instalable. Incluye el mismo revisor local de instrucciones que la versión Node.js; no es un modelo de IA conectado ni transmite texto.
+Versión Python del organizador KAIROS para estudiantes de Ciencias de Datos. Incluye materias y actividades ficticias de Python/pandas, estadística, bases de datos, aprendizaje automático y visualización; planificador por cuenta, cronómetro con alarma, cinco modos de priorización, cuaderno privado de experimentos, controles de cuenta y aplicación instalable. Incluye el revisor local de instrucciones y un asistente académico opcional conectado a un webhook de n8n; si ese webhook no está configurado, el chat avisa y la revisión local sigue funcionando sin enviar texto a ningún servicio externo.
 
 El servidor Python sustituye a Express y conserva las rutas `/api` que usa la interfaz. Las cuentas y los planes se guardan en PostgreSQL usando las mismas tablas `app_users` y `planner_data`; la sesión del servidor Python usa su propia tabla `kairos_python_sessions`. La versión Node puede seguir en la misma carpeta original y usar la misma base de datos. Esta copia abre por defecto en el puerto **3001**, para que las dos versiones puedan convivir.
 
@@ -30,6 +30,9 @@ Después de crear `.venv`, selecciona como intérprete `.venv\Scripts\python.exe
 | `HOST` y `PORT` | Dirección de escucha local | `127.0.0.1` y `3001` |
 | `DB_POOL_MAX` | Conexiones PostgreSQL máximas | `30` |
 | `WEB_THREADS` | Hilos HTTP de Waitress | `32` |
+| `N8N_WEBHOOK_URL` | URL HTTPS del webhook del asistente en n8n | Vacío (asistente desactivado) |
+| `N8N_SHARED_SECRET` | Clave que el servidor envía a n8n en `x-kairos-key` | Vacío (asistente desactivado) |
+| `AGENT_ALLOWED_EMAILS` | Correos del piloto separados por coma | Vacío (cualquier cuenta con sesión) |
 
 `preparar_configuracion.py` genera automáticamente un secreto aleatorio seguro cuando crea `.env`.
 
@@ -49,12 +52,20 @@ La app crea las tablas necesarias al iniciar; no es necesario usar pgAdmin para 
 
 Waitress ejecuta la aplicación con hilos y el pool de PostgreSQL reutiliza conexiones. Puede guardar más de 100 cuentas con uso normal; no se ha hecho una prueba de carga que garantice 100 conexiones simultáneas. DB_POOL_MAX permite ajustar el pool entre 5 y 100 (30 por defecto); no lo aumentes por encima del límite de conexiones de tu proveedor. Para publicar la aplicación a un grupo institucional se debe desplegar en un servidor con HTTPS, configurar APP_ENV=production, APP_ORIGIN con el dominio real, HOST=0.0.0.0 detrás de un proxy confiable, y dimensionar el pool y el número de hilos según el servidor. El equipo local no debe exponerse directamente a Internet.
 
-En producción Python confía un solo proxy frontal para obtener la IP cliente y el protocolo HTTPS. Conserva ese límite: no configures `ProxyFix` para confiar todos los proxies ni expongas Waitress directamente a Internet. El servidor aplica límites de intentos de autenticación por IP, poda las entradas antiguas de ese limitador, rechaza contraseñas de inicio de sesión mayores al límite admitido, protege las respuestas de API contra caché y requiere el origen correcto también al cerrar sesión. Para producción, usa PostgreSQL con almacenamiento persistente y copias de seguridad; la base gratuita de Render caduca a los 30 días.
+En producción Python confía un solo proxy frontal para obtener la IP cliente y el protocolo HTTPS. Conserva ese límite: no configures `ProxyFix` para confiar todos los proxies ni expongas Waitress directamente a Internet. El servidor aplica límites de intentos de autenticación por IP, poda las entradas antiguas de ese limitador, rechaza contraseñas de inicio de sesión mayores al límite admitido, protege las respuestas de API contra caché y requiere el origen correcto también al cerrar sesión. Para producción, usa PostgreSQL con almacenamiento persistente y copias de seguridad; la base gratuita de Render caduca a los 30 días. El asistente añade su propio límite de 12 consultas por minuto y por cuenta, un tiempo máximo de espera de 55 segundos y límites de tamaño en la solicitud y la respuesta.
+
+## Asistente académico con n8n
+
+La vista **Asistente** conversa con un workflow de n8n que el equipo configura en el servidor. El navegador nunca recibe la URL del webhook ni la clave compartida: envía el mensaje a `POST /api/agent` y el servidor añade el identificador de la cuenta desde la sesión. Antes del primer mensaje se muestra un aviso de privacidad; la conversación no se guarda en PostgreSQL ni en `localStorage`.
+
+El asistente puede proponer actividades, pero no las guarda: cada propuesta aparece como una tarjeta con el botón **Preparar en el formulario**, que abre la actividad con los datos sugeridos sin confirmar. La persona revisa fechas, ponderaciones y horas, y confirma manualmente. Para configurar el webhook, la clave, la lista de correos del piloto y el contrato JSON, consulta [`docs/N8N-AGENTE.md`](docs/N8N-AGENTE.md). Sin `N8N_WEBHOOK_URL` y `N8N_SHARED_SECRET`, la vista muestra «Sin configurar» y la revisión local de instrucciones sigue disponible.
 
 ## Estructura
 
-- `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API y servidor Waitress.
+- `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API, asistente opcional y servidor Waitress.
 - Interfaz web compartida con Node, con cuaderno de datos, exportación CSV y modo instalable.
+- `static/agent-chat.js`: vista del asistente; aviso de privacidad, conversación y propuestas que solo abren el formulario.
+- `docs/N8N-AGENTE.md`: contrato del webhook, variables de entorno y pasos de despliegue.
 - `requirements.txt`: dependencias Python.
 - `.env.example`: plantilla de configuración; duplica como `.env` para uso local.
 - `.vscode/launch.json`: configuración para depurar con VS Code.

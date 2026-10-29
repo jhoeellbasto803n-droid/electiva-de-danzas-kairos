@@ -96,5 +96,36 @@
       message:"Revisión local orientativa. Ningún dato se guarda ni se confirma automáticamente."
     };
   }
-  window.KairosAgent=Object.freeze({status:"local-review",catalog,analyzeActivityCandidates:async sourceText=>analyze(sourceText)});
+  async function agentStatus() {
+    const response = await fetch("/api/agent/status", {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" }
+    });
+    let data = null;
+    try { data = await response.json(); } catch (error) { data = null; }
+    if (!response.ok) throw new Error(data?.error || "No pude comprobar el asistente.");
+    return data || {};
+  }
+  async function chat(message, context) {
+    const text = String(message || "").trim();
+    if (!text) throw new Error("Escribe un mensaje antes de enviarlo.");
+    if (text.length > 4000) throw new Error("El mensaje supera los 4000 caracteres.");
+    const body = { mensaje: text };
+    if (context && typeof context === "object") {
+      if (context.candidatos !== undefined) body.candidatos = context.candidatos;
+      if (context.advertencias !== undefined) body.advertencias = context.advertencias;
+    }
+    const response = await fetch("/api/agent", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body)
+    });
+    let data = null;
+    try { data = await response.json(); } catch (error) { data = null; }
+    if (!response.ok) throw new Error(data?.error || "El asistente no está disponible en este momento.");
+    if (!data || typeof data.texto !== "string" || !data.texto.trim()) throw new Error("El asistente devolvió una respuesta inesperada.");
+    return { texto: data.texto, acciones: Array.isArray(data.acciones) ? data.acciones : [] };
+  }
+  window.KairosAgent=Object.freeze({status:"n8n-agent",localReview:true,catalog,analyzeActivityCandidates:async sourceText=>analyze(sourceText),chat,agentStatus});
 })();

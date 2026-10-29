@@ -24,9 +24,9 @@ Entorno de estudio para estudiantes de Ciencia de Datos: planifica materias y en
 - Cuaderno privado de experimentos con pregunta, fuente, método, métrica, resultado, límites y siguiente paso; permite editar, eliminar y exportar los registros como CSV.
 - Cambio de contraseña con invalidación de otras sesiones y eliminación de cuenta verificada con contraseña y frase de confirmación.
 - Aplicación web instalable (PWA) que almacena los recursos estáticos; el inicio de sesión, la bitácora y la sincronización requieren conexión.
-- Revisor local de instrucciones disponible; el agente de IA y las conexiones institucionales todavía no están conectados.
+- Revisor local de instrucciones en ambas versiones. La versión Python añade un asistente académico opcional conectado a un webhook de n8n; si no se configura, el chat avisa y la revisión local sigue igual. Las conexiones institucionales todavía no están conectadas.
 
-La integración con Google Calendar es por archivo CSV. El revisor de texto es determinista y local; no es todavía un modelo de IA ni una conexión institucional. Moodle, Canvas, Teams u otros portales institucionales no están conectados en vivo: eso requiere APIs oficiales y autorización de cada institución.
+La integración con Google Calendar es por archivo CSV. El revisor de texto es determinista y local; el asistente Python solo conversa cuando el servidor tiene `N8N_WEBHOOK_URL` y `N8N_SHARED_SECRET`, y sus propuestas nunca se guardan sin confirmación humana. La versión Node.js no incluye ese chat. Moodle, Canvas, Teams u otros portales institucionales no están conectados en vivo: eso requiere APIs oficiales y autorización de cada institución. La configuración del asistente está en [`python/docs/N8N-AGENTE.md`](python/docs/N8N-AGENTE.md).
 
 ## Requisitos
 

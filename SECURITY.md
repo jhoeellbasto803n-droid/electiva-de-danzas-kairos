@@ -10,6 +10,7 @@
 - Las sesiones se guardan en PostgreSQL y usan cookies `HttpOnly`, `SameSite=Lax` y `Secure` en producción.
 - Las solicitudes que modifican datos validan el origen; la autenticación limita intentos y el servidor limita el cuerpo recibido.
 - La API evita almacenar respuestas privadas en la caché del navegador. Se aplican CSP, protección contra marcos, `nosniff` y otras cabeceras.
+- El asistente opcional de la versión Python solo reenvía el texto al webhook de n8n configurado en el servidor; la URL y la clave compartida no llegan al navegador. Exige sesión y origen correcto, limita a 12 consultas por minuto por cuenta, espera como máximo 55 segundos y acota el tamaño de la solicitud y la respuesta. `AGENT_ALLOWED_EMAILS` permite cerrar el piloto a correos concretos. Sus propuestas nunca se guardan sin confirmación humana.
 - GitHub Actions ejecuta auditorías de dependencias y Dependabot propone actualizaciones.
 
 ## Al publicar
