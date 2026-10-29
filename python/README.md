@@ -1,6 +1,6 @@
 # KAIROS — Ciencias de Datos (Python)
 
-Versión Python del organizador KAIROS para estudiantes de Ciencias de Datos. Incluye materias y actividades ficticias de Python/pandas, estadística, bases de datos, aprendizaje automático y visualización; planificador por cuenta, cronómetro con alarma, cinco modos de priorización, cuaderno privado de experimentos, controles de cuenta y aplicación instalable. Incluye el revisor local de instrucciones y un asistente académico opcional conectado a un webhook de n8n; si ese webhook no está configurado, el chat avisa y la revisión local sigue funcionando sin enviar texto a ningún servicio externo.
+Versión Python del organizador KAIROS para estudiantes de Ciencias de Datos. Incluye materias y actividades ficticias de Python/pandas, estadística, bases de datos, aprendizaje automático y visualización; planificador por cuenta, cronómetro con alarma, cinco modos de priorización, cuaderno privado de experimentos, controles de cuenta y aplicación instalable. Incluye el revisor local de instrucciones y un asistente académico que, por defecto, responde con reglas deterministas sin enviar texto a ningún servicio externo. Si el equipo configura un webhook de n8n, el mismo asistente puede usar ese flujo; sin esa configuración, el chat local sigue funcionando.
 
 El servidor Python sustituye a Express y conserva las rutas `/api` que usa la interfaz. Las cuentas y los planes se guardan en PostgreSQL usando las mismas tablas `app_users` y `planner_data`; la sesión del servidor Python usa su propia tabla `kairos_python_sessions`. La versión Node puede seguir en la misma carpeta original y usar la misma base de datos. Esta copia abre por defecto en el puerto **3001**, para que las dos versiones puedan convivir.
 
@@ -30,8 +30,9 @@ Después de crear `.venv`, selecciona como intérprete `.venv\Scripts\python.exe
 | `HOST` y `PORT` | Dirección de escucha local | `127.0.0.1` y `3001` |
 | `DB_POOL_MAX` | Conexiones PostgreSQL máximas | `30` |
 | `WEB_THREADS` | Hilos HTTP de Waitress | `32` |
-| `N8N_WEBHOOK_URL` | URL HTTPS del webhook del asistente en n8n | Vacío (asistente desactivado) |
-| `N8N_SHARED_SECRET` | Clave que el servidor envía a n8n en `x-kairos-key` | Vacío (asistente desactivado) |
+| `AGENT_MODE` | `auto` usa n8n si está configurado; `local` fuerza reglas locales; `n8n` exige webhook y clave | `auto` |
+| `N8N_WEBHOOK_URL` | URL HTTPS del webhook del asistente en n8n | Vacío (se usa el modo local) |
+| `N8N_SHARED_SECRET` | Clave que el servidor envía a n8n en `x-kairos-key` | Vacío (se usa el modo local) |
 | `AGENT_ALLOWED_EMAILS` | Correos del piloto separados por coma | Vacío (cualquier cuenta con sesión) |
 
 `preparar_configuracion.py` genera automáticamente un secreto aleatorio seguro cuando crea `.env`.
@@ -54,18 +55,21 @@ Waitress ejecuta la aplicación con hilos y el pool de PostgreSQL reutiliza cone
 
 En producción Python confía un solo proxy frontal para obtener la IP cliente y el protocolo HTTPS. Conserva ese límite: no configures `ProxyFix` para confiar todos los proxies ni expongas Waitress directamente a Internet. El servidor aplica límites de intentos de autenticación por IP, poda las entradas antiguas de ese limitador, rechaza contraseñas de inicio de sesión mayores al límite admitido, protege las respuestas de API contra caché y requiere el origen correcto también al cerrar sesión. Para producción, usa PostgreSQL con almacenamiento persistente y copias de seguridad; la base gratuita de Render caduca a los 30 días. El asistente añade su propio límite de 12 consultas por minuto y por cuenta, un tiempo máximo de espera de 55 segundos y límites de tamaño en la solicitud y la respuesta.
 
-## Asistente académico con n8n
+## Asistente académico
 
-La vista **Asistente** conversa con un workflow de n8n que el equipo configura en el servidor. El navegador nunca recibe la URL del webhook ni la clave compartida: envía el mensaje a `POST /api/agent` y el servidor añade el identificador de la cuenta desde la sesión. Antes del primer mensaje se muestra un aviso de privacidad; la conversación no se guarda en PostgreSQL ni en `localStorage`.
+La vista **Asistente** funciona de inmediato con reglas locales en el servidor: no necesita claves, internet ni un modelo generativo. Analiza el mensaje, señala candidatos y explica el índice P, el plan semanal o las funciones de KAIROS. El navegador envía el mensaje a `POST /api/agent`; el servidor añade el identificador de la cuenta desde la sesión y responde. Antes del primer mensaje se muestra un aviso de privacidad; la conversación no se guarda en PostgreSQL ni en `localStorage`.
 
-El asistente puede proponer actividades, pero no las guarda: cada propuesta aparece como una tarjeta con el botón **Preparar en el formulario**, que abre la actividad con los datos sugeridos sin confirmar. La persona revisa fechas, ponderaciones y horas, y confirma manualmente. Para configurar el webhook, la clave, la lista de correos del piloto y el contrato JSON, consulta [`docs/N8N-AGENTE.md`](docs/N8N-AGENTE.md). Sin `N8N_WEBHOOK_URL` y `N8N_SHARED_SECRET`, la vista muestra «Sin configurar» y la revisión local de instrucciones sigue disponible.
+El asistente puede proponer actividades, pero no las guarda: cada propuesta aparece como una tarjeta con el botón **Preparar en el formulario**, que abre la actividad con los datos sugeridos sin confirmar. La persona revisa fechas, ponderaciones y horas, y confirma manualmente.
+
+n8n es una opción secundaria. Si el equipo define `N8N_WEBHOOK_URL` y `N8N_SHARED_SECRET`, `AGENT_MODE=auto` reenvía los mensajes a ese webhook; la URL y la clave nunca llegan al navegador. Para configurarlo, consulta [`docs/N8N-AGENTE.md`](docs/N8N-AGENTE.md). Con `AGENT_MODE=local`, el asistente local sigue activo aunque existan esas credenciales.
 
 ## Estructura
 
-- `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API, asistente opcional y servidor Waitress.
+- `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API, asistente (local o n8n) y servidor Waitress.
+- `local_agent.py`: reglas deterministas del asistente local; no usa servicios externos.
 - Interfaz web compartida con Node, con cuaderno de datos, exportación CSV y modo instalable.
 - `static/agent-chat.js`: vista del asistente; aviso de privacidad, conversación y propuestas que solo abren el formulario.
-- `docs/N8N-AGENTE.md`: contrato del webhook, variables de entorno y pasos de despliegue.
+- `docs/N8N-AGENTE.md`: modos local y n8n, contrato del webhook, variables de entorno y pasos de despliegue.
 - `requirements.txt`: dependencias Python.
 - `.env.example`: plantilla de configuración; duplica como `.env` para uso local.
 - `.vscode/launch.json`: configuración para depurar con VS Code.

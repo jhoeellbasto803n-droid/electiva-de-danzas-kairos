@@ -1,9 +1,9 @@
 """Servidor Python para KAIROS Ciencias de Datos.
 
 Conserva la API usada por la interfaz web y guarda usuarios, sesiones y
-planificacion en PostgreSQL. Incluye un asistente academico opcional que
-reenvia los mensajes a un webhook de n8n; sin configurar ese webhook, la
-revision local de instrucciones sigue funcionando igual.
+planificacion en PostgreSQL. Incluye un asistente academico que, por defecto,
+responde con reglas locales deterministas. Si el equipo configura un webhook
+de n8n, el mismo asistente puede reenviar los mensajes a ese flujo.
 """
 
 from __future__ import annotations
@@ -38,6 +38,8 @@ from werkzeug.datastructures import CallbackDict
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from waitress import serve
 
+from local_agent import fold, local_reply
+
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -60,8 +62,8 @@ if PRODUCTION and (ORIGIN_PARTS.scheme != "https" or not ORIGIN_PARTS.netloc or 
     raise RuntimeError("APP_ORIGIN debe ser la URL HTTPS pública, sin ruta, parámetros ni fragmento.")
 EXPECTED_ORIGIN = f"{ORIGIN_PARTS.scheme}://{ORIGIN_PARTS.netloc}".lower()
 
-# Asistente academico opcional mediante n8n. Es independiente de la revision
-# local: si falta la configuracion, el chat avisa y el resto de la app sigue igual.
+# Asistente academico: reglas locales por defecto y n8n como opcion secundaria.
+# La revision local de instrucciones sigue siendo independiente del chat.
 AGENT_TIMEOUT_SECONDS = 55
 AGENT_WINDOW_SECONDS = 60
 AGENT_MAX_REQUESTS = 12
@@ -96,6 +98,16 @@ def valid_agent_webhook(url: str) -> str:
 N8N_WEBHOOK_URL = valid_agent_webhook(os.getenv("N8N_WEBHOOK_URL", "").strip())
 AGENT_ENABLED = bool(N8N_WEBHOOK_URL and N8N_SHARED_SECRET)
 
+# auto: n8n si esta configurado, local en caso contrario. «local» permite
+# desactivar un n8n existente sin borrar sus credenciales.
+AGENT_MODE = os.getenv("AGENT_MODE", "auto").strip().lower()
+if AGENT_MODE not in {"auto", "local", "n8n"}:
+    raise RuntimeError("AGENT_MODE debe ser auto, local o n8n.")
+if AGENT_MODE == "auto":
+    AGENT_MODE = "n8n" if AGENT_ENABLED else "local"
+if AGENT_MODE == "n8n" and not AGENT_ENABLED:
+    raise RuntimeError("AGENT_MODE=n8n requiere N8N_WEBHOOK_URL y N8N_SHARED_SECRET.")
+
 if not DATABASE_URL:
     raise RuntimeError("Configura DATABASE_URL en el archivo .env antes de iniciar.")
 if len(SESSION_SECRET) < 32 or "REEMPLAZA_ESTO" in SESSION_SECRET:
@@ -105,9 +117,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("kairos")
 
 if N8N_WEBHOOK_URL and not N8N_SHARED_SECRET:
-    logger.warning("N8N_WEBHOOK_URL está definido, pero falta N8N_SHARED_SECRET: el asistente queda desactivado.")
+    logger.warning("N8N_WEBHOOK_URL está definido, pero falta N8N_SHARED_SECRET: se usará el asistente local.")
 if N8N_SHARED_SECRET and not N8N_WEBHOOK_URL:
-    logger.warning("N8N_SHARED_SECRET está definido, pero falta N8N_WEBHOOK_URL: el asistente queda desactivado.")
+    logger.warning("N8N_SHARED_SECRET está definido, pero falta N8N_WEBHOOK_URL: se usará el asistente local.")
+logger.info("Asistente académico en modo %s.", AGENT_MODE)
 
 pool = ConnectionPool(
     conninfo=DATABASE_URL,
@@ -247,6 +260,74 @@ def bounded_agent_context(value):
     except (TypeError, ValueError):
         return None
     return value if len(encoded) <= 8 * 1024 else None
+
+
+def bounded_agent_actions(actions):
+    """Normaliza las propuestas y limita su cantidad y tamano."""
+    if isinstance(actions, str):
+        try:
+            actions = json.loads(actions)
+        except json.JSONDecodeError:
+            actions = []
+    if not isinstance(actions, list):
+        return []
+    bounded, total = [], 0
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        try:
+            size = len(json.dumps(action, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        except (TypeError, ValueError):
+            continue
+        if size > 4000 or total + size > 16000:
+            continue
+        bounded.append(action)
+        total += size
+        if len(bounded) >= AGENT_MAX_ACTIONS:
+            break
+    return bounded
+
+
+def local_actions_for_user(user_id: str, actions):
+    """Confirma la materia sugerida solo si existe en los datos de la cuenta."""
+    if not actions:
+        return actions
+    with pool.connection() as conn:
+        row = conn.execute(
+            "SELECT data FROM planner_data WHERE user_id=%s", (user_id,)
+        ).fetchone()
+    data = row["data"] if row and isinstance(row["data"], dict) else {}
+    subjects = data.get("subjects") if isinstance(data.get("subjects"), list) else []
+    names = {}
+    for subject in subjects:
+        if isinstance(subject, dict) and isinstance(subject.get("name"), str):
+            names[fold(subject["name"])] = subject["name"]
+    for action in actions:
+        suggested = action.get("materia")
+        if not isinstance(suggested, str) or not suggested.strip():
+            continue
+        suggested_fold = fold(suggested)
+        match = names.get(suggested_fold)
+        if not match and len(suggested_fold) >= 4:
+            # «Estadística» puede corresponder a «Estadística y Probabilidad».
+            candidates = [
+                original
+                for normalized, original in names.items()
+                if suggested_fold in normalized or normalized in suggested_fold
+            ]
+            if len(candidates) == 1:
+                match = candidates[0]
+        if match:
+            action["materia"] = match
+            continue
+        # No se inventa una materia: se deja como nota para que la persona elija.
+        action.pop("materia", None)
+        note = str(action.get("nota") or "").strip()
+        action["nota"] = (
+            (note + " " if note else "")
+            + f"Posible materia detectada: {suggested} (no coincide con tus materias)."
+        )
+    return actions
 
 
 def valid_email(value):
@@ -570,20 +651,18 @@ def agent_status():
         session_data().clear()
         return jsonify(error="La cuenta ya no existe."), 401
     allowed = agent_allowed(row)
-    if not AGENT_ENABLED:
-        message = (
-            "El asistente todavía no está configurado en el servidor. "
-            "Añade N8N_WEBHOOK_URL y N8N_SHARED_SECRET y vuelve a desplegar."
-        )
-    elif not allowed:
+    if not allowed:
         message = "Esta cuenta no está habilitada para el piloto del asistente."
+    elif AGENT_MODE == "local":
+        message = "Asistente local de reglas activo. No envía tus mensajes a servicios externos."
     else:
         message = "Asistente conectado mediante n8n."
     return jsonify(
-        configured=AGENT_ENABLED,
+        mode=AGENT_MODE,
+        configured=True,
         allowed=allowed,
         allowlistConfigured=bool(AGENT_ALLOWED_EMAILS),
-        available=AGENT_ENABLED and allowed,
+        available=allowed,
         message=message,
     )
 
@@ -598,10 +677,6 @@ def agent_chat():
     if not row:
         session_data().clear()
         return jsonify(error="La cuenta ya no existe."), 401
-    if not AGENT_ENABLED:
-        return jsonify(
-            error="El asistente no está configurado. La revisión local sigue disponible."
-        ), 503
     if not agent_allowed(row):
         return jsonify(error="Esta cuenta no está habilitada para el piloto del asistente."), 403
 
@@ -609,6 +684,17 @@ def agent_chat():
     message = str(body.get("mensaje") or "").strip()
     if not 1 <= len(message) <= 4000:
         return jsonify(error="Escribe un mensaje de 1 a 4000 caracteres."), 400
+
+    if AGENT_MODE == "local":
+        answer = local_reply(message)
+        actions = local_actions_for_user(
+            row["id"], bounded_agent_actions(answer.get("acciones"))
+        )
+        logger.info("Consulta local del asistente atendida para %s", row["id"])
+        return jsonify(
+            texto=str(answer.get("texto") or "")[:12000],
+            acciones=actions,
+        )
 
     payload = {
         "mensaje": message,
@@ -668,35 +754,12 @@ def agent_chat():
     if not isinstance(text, str) or not text.strip():
         return jsonify(error="El asistente no devolvió una respuesta de texto."), 502
 
-    actions = answer.get("acciones") or []
-    if isinstance(actions, str):
-        try:
-            actions = json.loads(actions)
-        except json.JSONDecodeError:
-            actions = []
-    if not isinstance(actions, list):
-        actions = []
-    bounded_actions, total = [], 0
-    for action in actions:
-        if not isinstance(action, dict):
-            continue
-        try:
-            size = len(json.dumps(action, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        except (TypeError, ValueError):
-            continue
-        if size > 4000 or total + size > 16000:
-            continue
-        bounded_actions.append(action)
-        total += size
-        if len(bounded_actions) >= AGENT_MAX_ACTIONS:
-            break
-
     logger.info(
         "Consulta al asistente atendida para %s en %.1f s",
         row["id"],
         time.monotonic() - started,
     )
-    return jsonify(texto=text[:12000], acciones=bounded_actions)
+    return jsonify(texto=text[:12000], acciones=bounded_agent_actions(answer.get("acciones")))
 
 
 @app.get("/api/planner/state")

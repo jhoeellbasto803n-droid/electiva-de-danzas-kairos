@@ -1,18 +1,22 @@
-/* Asistente academico opcional.
- * Conversa con el flujo de n8n a traves de POST /api/agent. Nunca guarda ni
- * modifica actividades: las propuestas solo abren el formulario para revisar.
+/* Asistente academico.
+ * Conversa con el servidor a traves de POST /api/agent. Por defecto el servidor
+ * responde con reglas locales; si el equipo configura n8n, usa ese flujo.
+ * Nunca guarda ni modifica actividades: las propuestas solo abren el
+ * formulario para revision humana.
  */
 (() => {
   "use strict";
   const $ = selector => document.querySelector(selector);
   const fold = value => String(value || "").toLocaleLowerCase("es-CO").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const WELCOME = "Hola. Puedo ayudarte a leer una instrucción, comparar entregas o preparar una actividad. No guardo nada por mi cuenta: cuando propongo una actividad, la cargo en el formulario para que revises cada dato y decidas.";
+  const WELCOME = "Hola. Soy el asistente local de KAIROS. Puedo ayudarte a leer una instrucción, comparar entregas o preparar una actividad con reglas deterministas. No guardo nada por mi cuenta: cuando propongo una actividad, la cargo en el formulario para que revises cada dato y decidas.";
   const state = { info: null, sending: false, messages: [] };
   const userID = () => String(window.KairosAuth?.user?.id || "local");
-  const privacyKey = () => "kairos-agent-privacy:" + userID();
+  const mode = () => state.info?.mode === "n8n" ? "n8n" : "local";
+  // Cambiar de modo vuelve a pedir el aviso: el destino de los mensajes cambia.
+  const privacyKey = () => "kairos-agent-privacy:" + userID() + ":" + mode();
 
   const el = {};
-  ["agent-state", "agent-privacy", "agent-privacy-ok", "agent-log", "agent-form", "agent-input", "agent-hint", "agent-clear", "agent-prompts"].forEach(id => {
+  ["agent-state", "agent-privacy", "agent-privacy-text", "agent-privacy-ok", "agent-log", "agent-form", "agent-input", "agent-hint", "agent-clear", "agent-prompts", "agent-mode-label", "agent-small-note"].forEach(id => {
     el[id] = document.getElementById(id);
   });
   if (!el["agent-log"] || !el["agent-form"]) return;
@@ -23,11 +27,25 @@
   function acceptPrivacy() {
     try { localStorage.setItem(privacyKey(), "1"); } catch (error) { /* almacenamiento no disponible */ }
   }
+  function updatePrivacyText() {
+    if (!el["agent-privacy-text"]) return;
+    el["agent-privacy-text"].textContent = mode() === "n8n"
+      ? "Los mensajes que escribas se envían al flujo de n8n configurado por el equipo del proyecto y pueden pasar por el modelo de IA que ese flujo use. Solo se envía el texto que escribas; no se envían materias, notas ni actividades automáticamente. El asistente no registra nada por su cuenta y no debes escribir contraseñas ni datos de terceros."
+      : "En este momento el asistente funciona con reglas locales en el servidor de KAIROS: tus mensajes no se envían a un modelo de IA externo ni a n8n. Solo se procesa el texto que escribas; no se envían materias, notas ni actividades automáticamente. El asistente no registra nada por su cuenta y no debes escribir contraseñas ni datos de terceros. Si el equipo activa n8n, este aviso lo indicará antes de escribir.";
+  }
   function showPrivacyGate() {
+    updatePrivacyText();
     const accepted = privacyAccepted();
     el["agent-privacy"].hidden = accepted;
     el["agent-form"].hidden = !accepted;
     if (!accepted) el["agent-privacy-ok"]?.focus();
+  }
+  function updateModeLabels() {
+    const remote = mode() === "n8n";
+    if (el["agent-mode-label"]) el["agent-mode-label"].textContent = remote
+      ? "Conectado por n8n · sin decisiones automáticas"
+      : "Reglas locales · sin decisiones automáticas";
+    if (el["agent-small-note"]) el["agent-small-note"].textContent = remote ? "Conectado por n8n" : "Reglas locales";
   }
 
   function setStatus(text, tone) {
@@ -45,23 +63,28 @@
   }
   function setAvailability(info) {
     state.info = info || null;
+    updateModeLabels();
+    updatePrivacyText();
     const available = !!(info && info.available);
     if (!info) {
       setStatus("Sin comprobar", "off");
-    } else if (!info.configured) {
-      setStatus("Sin configurar", "off");
     } else if (!info.allowed) {
       setStatus("Cuenta no habilitada", "off");
+    } else if (info.mode === "n8n") {
+      setStatus("Disponible · n8n", "on");
     } else {
-      setStatus("Disponible", "on");
+      setStatus("Disponible · local", "on");
     }
     if (!available) {
       el["agent-hint"].textContent = (info && info.message ? info.message + " " : "") + "La revisión local de instrucciones sigue disponible en el formulario de actividades.";
     } else if (state.sending) {
       el["agent-hint"].textContent = "El asistente está respondiendo. Enter envía, Shift+Enter hace un salto de línea.";
-    } else {
+    } else if (info.mode === "n8n") {
       el["agent-hint"].textContent = "El asistente propone; tú confirmas. Enter envía, Shift+Enter hace un salto de línea.";
+    } else {
+      el["agent-hint"].textContent = "Reglas locales: tus mensajes no salen del servidor de KAIROS. Enter envía, Shift+Enter hace un salto de línea.";
     }
+    showPrivacyGate();
     setBusy(state.sending);
   }
 
@@ -72,8 +95,10 @@
       setAvailability(await window.KairosAgent.agentStatus());
     } catch (error) {
       setStatus("No disponible", "off");
-      setAvailability(null);
+      state.info = null;
+      updateModeLabels();
       el["agent-hint"].textContent = (error.message || "No pude comprobar el asistente.") + " La revisión local sigue disponible en Actividades.";
+      setBusy(false);
     }
   }
 
@@ -265,6 +290,9 @@
     el["agent-input"].value = "";
     resize();
     el["agent-input"].focus();
+    if (state.info?.mode === "local") {
+      el["agent-hint"].textContent = "Reglas locales: tus mensajes no salen del servidor de KAIROS. Enter envía, Shift+Enter hace un salto de línea.";
+    }
   }
 
   el["agent-form"].addEventListener("submit", event => {
@@ -300,6 +328,7 @@
     }
   });
 
+  updateModeLabels();
   showPrivacyGate();
   renderHistory();
   resize();

@@ -127,5 +127,5 @@
     if (!data || typeof data.texto !== "string" || !data.texto.trim()) throw new Error("El asistente devolvió una respuesta inesperada.");
     return { texto: data.texto, acciones: Array.isArray(data.acciones) ? data.acciones : [] };
   }
-  window.KairosAgent=Object.freeze({status:"n8n-agent",localReview:true,catalog,analyzeActivityCandidates:async sourceText=>analyze(sourceText),chat,agentStatus});
+  window.KairosAgent=Object.freeze({status:"local-first",localReview:true,catalog,analyzeActivityCandidates:async sourceText=>analyze(sourceText),chat,agentStatus});
 })();
