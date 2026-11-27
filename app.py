@@ -1,9 +1,7 @@
-"""Servidor Python para KAIROS Ciencias de Datos.
+"""Servidor Python para Electiva de Danzas / KAIROS.
 
 Conserva la API usada por la interfaz web y guarda usuarios, sesiones y
-planificacion en PostgreSQL. Incluye un asistente academico que, por defecto,
-responde con reglas locales deterministas. Si el equipo configura un webhook
-de n8n, el mismo asistente puede reenviar los mensajes a ese flujo.
+planificacion en PostgreSQL. La primera version no incluye el agente de IA.
 """
 
 from __future__ import annotations
@@ -16,8 +14,6 @@ import os
 import secrets
 import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 from collections import defaultdict, deque
 from datetime import timedelta
@@ -38,75 +34,20 @@ from werkzeug.datastructures import CallbackDict
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from waitress import serve
 
-from local_agent import fold, local_reply
-
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 load_dotenv(BASE_DIR / ".env")
 
 PORT = int(os.getenv("PORT", "3001"))
-APP_ENV = os.getenv("APP_ENV", "development").lower()
-PRODUCTION = APP_ENV == "production"
-HOST = os.getenv("HOST", "0.0.0.0" if PRODUCTION else "127.0.0.1")
-APP_ORIGIN = os.getenv("APP_ORIGIN") or os.getenv("RENDER_EXTERNAL_URL") or f"http://localhost:{PORT}"
+HOST = os.getenv("HOST", "127.0.0.1")
+APP_ORIGIN = os.getenv("APP_ORIGIN", f"http://localhost:{PORT}")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 SESSION_SECRET = os.getenv("SESSION_SECRET", "")
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+PRODUCTION = APP_ENV == "production"
 SESSION_LIFETIME = timedelta(hours=8)
 MAX_BODY_BYTES = 2 * 1024 * 1024
-DB_POOL_MAX = int(os.getenv("DB_POOL_MAX", "30"))
-if not 5 <= DB_POOL_MAX <= 100:
-    raise RuntimeError("DB_POOL_MAX debe estar entre 5 y 100.")
-ORIGIN_PARTS = urlsplit(APP_ORIGIN)
-if PRODUCTION and (ORIGIN_PARTS.scheme != "https" or not ORIGIN_PARTS.netloc or ORIGIN_PARTS.path not in ("", "/") or ORIGIN_PARTS.query or ORIGIN_PARTS.fragment):
-    raise RuntimeError("APP_ORIGIN debe ser la URL HTTPS pública, sin ruta, parámetros ni fragmento.")
-EXPECTED_ORIGIN = f"{ORIGIN_PARTS.scheme}://{ORIGIN_PARTS.netloc}".lower()
-
-# Asistente academico: reglas locales por defecto y n8n como opcion secundaria.
-# La revision local de instrucciones sigue siendo independiente del chat.
-AGENT_TIMEOUT_SECONDS = 55
-AGENT_WINDOW_SECONDS = 60
-AGENT_MAX_REQUESTS = 12
-AGENT_MAX_ACTIONS = 10
-AGENT_RESPONSE_LIMIT = 96 * 1024
-AGENT_ALLOWED_EMAILS = {
-    item.strip().lower()
-    for item in os.getenv("AGENT_ALLOWED_EMAILS", "").split(",")
-    if item.strip()
-}
-N8N_SHARED_SECRET = os.getenv("N8N_SHARED_SECRET", "").strip()
-
-
-def valid_agent_webhook(url: str) -> str:
-    if not url:
-        return ""
-    parts = urlsplit(url)
-    loopback = {"localhost", "127.0.0.1", "::1"}
-    if parts.scheme not in {"http", "https"} or not parts.netloc or parts.query or parts.fragment:
-        raise RuntimeError(
-            "N8N_WEBHOOK_URL debe ser la URL completa del webhook de n8n, sin parámetros ni fragmento."
-        )
-    if parts.scheme == "https":
-        return url
-    if not PRODUCTION and parts.hostname in loopback:
-        return url
-    raise RuntimeError(
-        "N8N_WEBHOOK_URL debe usar HTTPS; solo se admite HTTP local en desarrollo."
-    )
-
-
-N8N_WEBHOOK_URL = valid_agent_webhook(os.getenv("N8N_WEBHOOK_URL", "").strip())
-AGENT_ENABLED = bool(N8N_WEBHOOK_URL and N8N_SHARED_SECRET)
-
-# auto: n8n si esta configurado, local en caso contrario. «local» permite
-# desactivar un n8n existente sin borrar sus credenciales.
-AGENT_MODE = os.getenv("AGENT_MODE", "auto").strip().lower()
-if AGENT_MODE not in {"auto", "local", "n8n"}:
-    raise RuntimeError("AGENT_MODE debe ser auto, local o n8n.")
-if AGENT_MODE == "auto":
-    AGENT_MODE = "n8n" if AGENT_ENABLED else "local"
-if AGENT_MODE == "n8n" and not AGENT_ENABLED:
-    raise RuntimeError("AGENT_MODE=n8n requiere N8N_WEBHOOK_URL y N8N_SHARED_SECRET.")
 
 if not DATABASE_URL:
     raise RuntimeError("Configura DATABASE_URL en el archivo .env antes de iniciar.")
@@ -116,16 +57,10 @@ if len(SESSION_SECRET) < 32 or "REEMPLAZA_ESTO" in SESSION_SECRET:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("kairos")
 
-if N8N_WEBHOOK_URL and not N8N_SHARED_SECRET:
-    logger.warning("N8N_WEBHOOK_URL está definido, pero falta N8N_SHARED_SECRET: se usará el asistente local.")
-if N8N_SHARED_SECRET and not N8N_WEBHOOK_URL:
-    logger.warning("N8N_SHARED_SECRET está definido, pero falta N8N_WEBHOOK_URL: se usará el asistente local.")
-logger.info("Asistente académico en modo %s.", AGENT_MODE)
-
 pool = ConnectionPool(
     conninfo=DATABASE_URL,
     min_size=1,
-    max_size=DB_POOL_MAX,
+    max_size=int(os.getenv("DB_POOL_MAX", "30")),
     timeout=10,
     kwargs={"row_factory": dict_row},
     open=False,
@@ -235,101 +170,6 @@ def public_user(row):
     return {"id": row["id"], "name": row["name"], "email": row["email"]}
 
 
-def session_user():
-    """Cuenta autenticada de la sesion actual, o None si ya no existe."""
-    user_id = session_data().get("user_id")
-    if not user_id:
-        return None
-    with pool.connection() as conn:
-        return conn.execute(
-            "SELECT id,name,email FROM app_users WHERE id=%s", (user_id,)
-        ).fetchone()
-
-
-def agent_allowed(row) -> bool:
-    # Con la lista vacia el piloto queda abierto a cualquier cuenta de KAIROS.
-    return not AGENT_ALLOWED_EMAILS or str(row["email"]).lower() in AGENT_ALLOWED_EMAILS
-
-
-def bounded_agent_context(value):
-    """Devuelve el valor solo si es JSON pequeno; evita reenviar cuerpos enormes."""
-    if not isinstance(value, (dict, list)):
-        return None
-    try:
-        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    except (TypeError, ValueError):
-        return None
-    return value if len(encoded) <= 8 * 1024 else None
-
-
-def bounded_agent_actions(actions):
-    """Normaliza las propuestas y limita su cantidad y tamano."""
-    if isinstance(actions, str):
-        try:
-            actions = json.loads(actions)
-        except json.JSONDecodeError:
-            actions = []
-    if not isinstance(actions, list):
-        return []
-    bounded, total = [], 0
-    for action in actions:
-        if not isinstance(action, dict):
-            continue
-        try:
-            size = len(json.dumps(action, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        except (TypeError, ValueError):
-            continue
-        if size > 4000 or total + size > 16000:
-            continue
-        bounded.append(action)
-        total += size
-        if len(bounded) >= AGENT_MAX_ACTIONS:
-            break
-    return bounded
-
-
-def local_actions_for_user(user_id: str, actions):
-    """Confirma la materia sugerida solo si existe en los datos de la cuenta."""
-    if not actions:
-        return actions
-    with pool.connection() as conn:
-        row = conn.execute(
-            "SELECT data FROM planner_data WHERE user_id=%s", (user_id,)
-        ).fetchone()
-    data = row["data"] if row and isinstance(row["data"], dict) else {}
-    subjects = data.get("subjects") if isinstance(data.get("subjects"), list) else []
-    names = {}
-    for subject in subjects:
-        if isinstance(subject, dict) and isinstance(subject.get("name"), str):
-            names[fold(subject["name"])] = subject["name"]
-    for action in actions:
-        suggested = action.get("materia")
-        if not isinstance(suggested, str) or not suggested.strip():
-            continue
-        suggested_fold = fold(suggested)
-        match = names.get(suggested_fold)
-        if not match and len(suggested_fold) >= 4:
-            # «Estadística» puede corresponder a «Estadística y Probabilidad».
-            candidates = [
-                original
-                for normalized, original in names.items()
-                if suggested_fold in normalized or normalized in suggested_fold
-            ]
-            if len(candidates) == 1:
-                match = candidates[0]
-        if match:
-            action["materia"] = match
-            continue
-        # No se inventa una materia: se deja como nota para que la persona elija.
-        action.pop("materia", None)
-        note = str(action.get("nota") or "").strip()
-        action["nota"] = (
-            (note + " " if note else "")
-            + f"Posible materia detectada: {suggested} (no coincide con tus materias)."
-        )
-    return actions
-
-
 def valid_email(value):
     return (
         isinstance(value, str)
@@ -392,25 +232,9 @@ def session_data():
 
 def same_origin():
     origin = request.headers.get("Origin")
-    allowed = bool(origin and origin.rstrip("/").lower() == EXPECTED_ORIGIN)
-    if origin and not allowed and not PRODUCTION:
-        try:
-            requested = urlsplit(origin)
-            loopback_hosts = {"localhost", "127.0.0.1", "::1"}
-            requested_port = requested.port or (443 if requested.scheme.lower() == "https" else 80)
-            configured_port = ORIGIN_PARTS.port or (443 if ORIGIN_PARTS.scheme.lower() == "https" else 80)
-            allowed = (
-                requested.scheme.lower() == ORIGIN_PARTS.scheme.lower()
-                and requested_port == configured_port
-                and requested.hostname in loopback_hosts
-                and ORIGIN_PARTS.hostname in loopback_hosts
-                and requested.path in ("", "/")
-                and not requested.query
-                and not requested.fragment
-            )
-        except ValueError:
-            allowed = False
-    if not allowed:
+    actual = urlsplit(APP_ORIGIN)
+    expected = f"{actual.scheme}://{actual.netloc}".lower()
+    if not origin or origin.rstrip("/").lower() != expected:
         return jsonify(error="Origen de solicitud no permitido."), 403
     return None
 
@@ -419,23 +243,12 @@ AUTH_ATTEMPTS = defaultdict(deque)
 AUTH_LOCK = threading.Lock()
 AUTH_WINDOW_SECONDS = 15 * 60
 AUTH_MAX_ATTEMPTS = 12
-AUTH_LIMITER_CHECKS = 0
 
 
 def rate_limit_auth():
-    global AUTH_LIMITER_CHECKS
     now = time.monotonic()
     key = request.remote_addr or "unknown"
     with AUTH_LOCK:
-        AUTH_LIMITER_CHECKS += 1
-        if AUTH_LIMITER_CHECKS % 128 == 0 or len(AUTH_ATTEMPTS) >= 10000:
-            for address, queue in list(AUTH_ATTEMPTS.items()):
-                while queue and now - queue[0] >= AUTH_WINDOW_SECONDS:
-                    queue.popleft()
-                if not queue:
-                    AUTH_ATTEMPTS.pop(address, None)
-            while len(AUTH_ATTEMPTS) >= 10000 and key not in AUTH_ATTEMPTS:
-                AUTH_ATTEMPTS.pop(next(iter(AUTH_ATTEMPTS)))
         attempts = AUTH_ATTEMPTS[key]
         while attempts and now - attempts[0] >= AUTH_WINDOW_SECONDS:
             attempts.popleft()
@@ -448,35 +261,6 @@ def rate_limit_auth():
 def request_object():
     body = request.get_json(silent=True)
     return body if isinstance(body, dict) else {}
-
-
-AGENT_ATTEMPTS = defaultdict(deque)
-AGENT_LOCK = threading.Lock()
-AGENT_LIMITER_CHECKS = 0
-
-
-def rate_limit_agent(user_id: str):
-    global AGENT_LIMITER_CHECKS
-    now = time.monotonic()
-    with AGENT_LOCK:
-        AGENT_LIMITER_CHECKS += 1
-        if AGENT_LIMITER_CHECKS % 128 == 0 or len(AGENT_ATTEMPTS) >= 10000:
-            for key, queue in list(AGENT_ATTEMPTS.items()):
-                while queue and now - queue[0] >= AGENT_WINDOW_SECONDS:
-                    queue.popleft()
-                if not queue:
-                    AGENT_ATTEMPTS.pop(key, None)
-            while len(AGENT_ATTEMPTS) >= 10000 and user_id not in AGENT_ATTEMPTS:
-                AGENT_ATTEMPTS.pop(next(iter(AGENT_ATTEMPTS)))
-        attempts = AGENT_ATTEMPTS[user_id]
-        while attempts and now - attempts[0] >= AGENT_WINDOW_SECONDS:
-            attempts.popleft()
-        if len(attempts) >= AGENT_MAX_REQUESTS:
-            return jsonify(
-                error="Hiciste muchas consultas seguidas. Espera un minuto y vuelve a intentarlo."
-            ), 429
-        attempts.append(now)
-    return None
 
 
 @app.get("/api/health")
@@ -528,7 +312,7 @@ def login():
     body = request_object()
     email = str(body.get("email") or "").strip().lower()
     password = str(body.get("password") or "")
-    if not valid_email(email) or not password or len(password.encode("utf-8")) > 256:
+    if not valid_email(email) or not password:
         return jsonify(error="Correo o contraseña incorrectos."), 401
     with pool.connection() as conn:
         row = conn.execute(
@@ -563,203 +347,10 @@ def current_user():
 @app.post("/api/auth/logout")
 @auth_required
 def logout():
-    rejected = same_origin()
-    if rejected:
-        return rejected
     from flask import session
 
     session.clear()
     return jsonify(ok=True)
-
-
-@app.post("/api/auth/password")
-@auth_required
-def change_password():
-    rejected = same_origin() or rate_limit_auth()
-    if rejected:
-        return rejected
-    body = request_object()
-    current = str(body.get("currentPassword") or "")
-    new_password = str(body.get("newPassword") or "")
-    user_id = session_data().get("user_id")
-    if len(current.encode("utf-8")) > 256:
-        return jsonify(error="La contraseña actual no es correcta."), 401
-    if len(new_password) < 10 or len(new_password.encode("utf-8")) > 256:
-        return jsonify(error="La nueva contraseña debe tener al menos 10 caracteres."), 400
-    with pool.connection() as conn:
-        row = conn.execute(
-            "SELECT password_hash FROM app_users WHERE id=%s", (user_id,)
-        ).fetchone()
-    if not row or not verify_password(current, row["password_hash"]):
-        return jsonify(error="La contraseña actual no es correcta."), 401
-    with pool.connection() as conn:
-        conn.execute(
-            "UPDATE app_users SET password_hash=%s WHERE id=%s",
-            (password_hash(new_password), user_id),
-        )
-        conn.execute(
-            "DELETE FROM kairos_python_sessions WHERE data->>'user_id'=%s AND sid<>%s",
-            (user_id, session_data().sid),
-        )
-        if conn.execute(
-            "SELECT to_regclass('web_sessions') IS NOT NULL AS present"
-        ).fetchone()["present"]:
-            conn.execute(
-                "DELETE FROM web_sessions WHERE sess->>'userId'=%s", (user_id,)
-            )
-    app.session_interface.regenerate(session_data())
-    return jsonify(ok=True, message="Contraseña actualizada. Se cerraron las demás sesiones.")
-
-
-@app.delete("/api/auth/account")
-@auth_required
-def delete_account():
-    rejected = same_origin() or rate_limit_auth()
-    if rejected:
-        return rejected
-    body = request_object()
-    password = str(body.get("password") or "")
-    if str(body.get("confirmation") or "") != "ELIMINAR":
-        return jsonify(error="Escribe ELIMINAR para confirmar."), 400
-    user_id = session_data().get("user_id")
-    with pool.connection() as conn:
-        row = conn.execute(
-            "SELECT password_hash FROM app_users WHERE id=%s", (user_id,)
-        ).fetchone()
-    if not row or not verify_password(password, row["password_hash"]):
-        return jsonify(error="La contraseña no es correcta."), 401
-    with pool.connection() as conn:
-        conn.execute(
-            "DELETE FROM kairos_python_sessions WHERE data->>'user_id'=%s", (user_id,)
-        )
-        if conn.execute(
-            "SELECT to_regclass('web_sessions') IS NOT NULL AS present"
-        ).fetchone()["present"]:
-            conn.execute(
-                "DELETE FROM web_sessions WHERE sess->>'userId'=%s", (user_id,)
-            )
-        conn.execute("DELETE FROM app_users WHERE id=%s", (user_id,))
-    session_data().clear()
-    return jsonify(ok=True)
-
-
-@app.get("/api/agent/status")
-@auth_required
-def agent_status():
-    row = session_user()
-    if not row:
-        session_data().clear()
-        return jsonify(error="La cuenta ya no existe."), 401
-    allowed = agent_allowed(row)
-    if not allowed:
-        message = "Esta cuenta no está habilitada para el piloto del asistente."
-    elif AGENT_MODE == "local":
-        message = "Asistente local de reglas activo. No envía tus mensajes a servicios externos."
-    else:
-        message = "Asistente conectado mediante n8n."
-    return jsonify(
-        mode=AGENT_MODE,
-        configured=True,
-        allowed=allowed,
-        allowlistConfigured=bool(AGENT_ALLOWED_EMAILS),
-        available=allowed,
-        message=message,
-    )
-
-
-@app.post("/api/agent")
-@auth_required
-def agent_chat():
-    rejected = same_origin() or rate_limit_agent(session_data().get("user_id"))
-    if rejected:
-        return rejected
-    row = session_user()
-    if not row:
-        session_data().clear()
-        return jsonify(error="La cuenta ya no existe."), 401
-    if not agent_allowed(row):
-        return jsonify(error="Esta cuenta no está habilitada para el piloto del asistente."), 403
-
-    body = request_object()
-    message = str(body.get("mensaje") or "").strip()
-    if not 1 <= len(message) <= 4000:
-        return jsonify(error="Escribe un mensaje de 1 a 4000 caracteres."), 400
-
-    if AGENT_MODE == "local":
-        answer = local_reply(message)
-        actions = local_actions_for_user(
-            row["id"], bounded_agent_actions(answer.get("acciones"))
-        )
-        logger.info("Consulta local del asistente atendida para %s", row["id"])
-        return jsonify(
-            texto=str(answer.get("texto") or "")[:12000],
-            acciones=actions,
-        )
-
-    payload = {
-        "mensaje": message,
-        "estudianteId": row["id"],
-        "sessionId": f"kairos-{row['id']}",
-        "nombre": row["name"],
-        "correo": row["email"],
-        "origen": "kairos-python",
-        "candidatos": bounded_agent_context(body.get("candidatos")),
-        "advertencias": bounded_agent_context(body.get("advertencias")),
-    }
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    webhook_request = urllib.request.Request(
-        N8N_WEBHOOK_URL,
-        data=encoded,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "KAIROS-Python/1.0",
-            "x-kairos-key": N8N_SHARED_SECRET,
-        },
-    )
-    started = time.monotonic()
-    try:
-        with urllib.request.urlopen(webhook_request, timeout=AGENT_TIMEOUT_SECONDS) as response:
-            raw = response.read(AGENT_RESPONSE_LIMIT + 1)
-    except urllib.error.HTTPError as exc:
-        logger.warning(
-            "El webhook de n8n rechazó la consulta de %s con HTTP %s", row["id"], exc.code
-        )
-        return jsonify(
-            error="El asistente rechazó la consulta. Revisa la clave compartida y el workflow de n8n."
-        ), 502
-    except (TimeoutError, urllib.error.URLError, OSError):
-        logger.warning(
-            "No se pudo contactar el webhook de n8n para %s tras %.1f s",
-            row["id"],
-            time.monotonic() - started,
-        )
-        return jsonify(
-            error="El asistente no respondió a tiempo. Inténtalo de nuevo en un momento."
-        ), 504
-
-    if len(raw) > AGENT_RESPONSE_LIMIT:
-        logger.warning("El webhook de n8n devolvió una respuesta demasiado grande para %s", row["id"])
-        return jsonify(error="El asistente devolvió una respuesta demasiado larga."), 502
-    try:
-        answer = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        logger.warning("El webhook de n8n devolvió JSON inválido para %s", row["id"])
-        return jsonify(error="El asistente devolvió una respuesta que no pude leer."), 502
-    if not isinstance(answer, dict):
-        return jsonify(error="El asistente devolvió una respuesta inesperada."), 502
-
-    text = answer.get("texto", answer.get("respuesta"))
-    if not isinstance(text, str) or not text.strip():
-        return jsonify(error="El asistente no devolvió una respuesta de texto."), 502
-
-    logger.info(
-        "Consulta al asistente atendida para %s en %.1f s",
-        row["id"],
-        time.monotonic() - started,
-    )
-    return jsonify(texto=text[:12000], acciones=bounded_agent_actions(answer.get("acciones")))
 
 
 @app.get("/api/planner/state")
@@ -803,14 +394,7 @@ def put_planner_state():
     return jsonify(ok=True)
 
 
-PUBLIC_FILES = {
-    "index.html", "styles.css", "ai-agent.js", "priority-engine.js", "auth-client.js", "app.js", "enhancements.js",
-    "lab.js", "agent-chat.js", "manifest.webmanifest", "service-worker.js", "icon-192.svg", "icon-512.svg",
-    "icon-192.png", "icon-512.png",
-    "fonts/inter-variable-latin.woff2", "fonts/poppins-400-latin.woff2",
-    "fonts/poppins-500-latin.woff2", "fonts/poppins-600-latin.woff2",
-    "fonts/poppins-700-latin.woff2", "fonts/poppins-800-latin.woff2",
-}
+PUBLIC_FILES = {"index.html", "styles.css", "ai-agent.js", "auth-client.js", "app.js", "enhancements.js"}
 
 
 @app.get("/")
@@ -818,11 +402,7 @@ PUBLIC_FILES = {
 def static_file(filename="index.html"):
     if filename not in PUBLIC_FILES:
         return jsonify(error="No encontrado."), 404
-    response = send_from_directory(STATIC_DIR, filename)
-    if filename == "service-worker.js":
-        response.headers["Service-Worker-Allowed"] = "/"
-        response.headers["Cache-Control"] = "no-cache"
-    return response
+    return send_from_directory(STATIC_DIR, filename)
 
 
 @app.after_request
@@ -831,18 +411,10 @@ def security_headers(response):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-    response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
-    if request.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["Pragma"] = "no-cache"
-    if PRODUCTION and request.is_secure:
-        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-        + ("; upgrade-insecure-requests" if PRODUCTION else ""),
+        "img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     )
     return response
 
@@ -887,15 +459,10 @@ def initialize_database():
 
 
 def main():
-    if PRODUCTION:
-        from werkzeug.middleware.proxy_fix import ProxyFix
-
-        # Trust only the single HTTPS proxy in front of the app (for example Render).
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     pool.open()
     pool.wait(timeout=15)
     initialize_database()
-    logger.info("KAIROS Ciencias de Datos disponible en http://%s:%s", HOST, PORT)
+    logger.info("Electiva de Danzas Python disponible en http://%s:%s", HOST, PORT)
     logger.info("Concurrencia web: Waitress; conexiones PostgreSQL máx.: %s", pool.max_size)
     serve(app, host=HOST, port=PORT, threads=int(os.getenv("WEB_THREADS", "32")))
 
