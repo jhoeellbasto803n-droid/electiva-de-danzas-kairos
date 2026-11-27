@@ -1,19 +1,43 @@
-/* Asistente academico.
- * Conversa con el servidor a traves de POST /api/agent. Por defecto el servidor
- * responde con reglas locales; si el equipo configura n8n, usa ese flujo.
- * Nunca guarda ni modifica actividades: las propuestas solo abren el
- * formulario para revision humana.
+/* Asistente academico local.
+ * Conversa con el servidor a traves de POST /api/agent, que siempre responde
+ * con reglas deterministas. Nunca guarda ni modifica actividades: las
+ * propuestas solo abren el formulario para revision humana.
  */
 (() => {
   "use strict";
   const $ = selector => document.querySelector(selector);
   const fold = value => String(value || "").toLocaleLowerCase("es-CO").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const WELCOME = "Hola. Soy el asistente local de KAIROS. Puedo ayudarte a leer una instrucción, comparar entregas o preparar una actividad con reglas deterministas. No guardo nada por mi cuenta: cuando propongo una actividad, la cargo en el formulario para que revises cada dato y decidas.";
+  const WELCOME = "Hola. Soy el asistente de KAIROS. Puedo consultar en modo solo lectura tus materias, actividades, notas, prioridades y cuaderno, además de ayudarte a leer instrucciones y preparar propuestas para que las revises. No modifico nada por mi cuenta.";
+  const LOCAL_HINT = "Reglas locales + tus datos: el servidor lee tu plan en modo solo lectura y no lo envía a modelos externos. Enter envía, Shift+Enter hace un salto de línea.";
+
+  function privacyText() {
+    const info = state.info || {};
+    const partes = [];
+    if (info.modeloActivo) {
+      partes.push("Las preguntas generales las responde un modelo que corre en tu propia máquina, no en un servicio externo. El modelo recibe las reglas de la app y no puede inventar datos ni acciones: el servidor verifica lo que propone. Los temas de KAIROS y los datos de tu cuenta se responden con reglas, sin consultar al modelo. Para responder sobre tus materias, actividades, notas, prioridades o cuaderno, el servidor lee esos datos de tu cuenta en modo solo lectura y no los modifica.");
+    } else {
+      partes.push("El asistente funciona con reglas locales en el servidor de KAIROS: tus mensajes no se envían a un modelo externo.");
+    }
+    if (info.webActiva) {
+      partes.push("Para preguntas generales se consulta la web pública (Wikipedia): sale el texto de la búsqueda, nunca tus contraseñas ni datos de terceros.");
+    } else {
+      partes.push("No se consulta la web ni se envían tus mensajes a servicios externos.");
+    }
+    partes.push("Para responder sobre tu cuenta, el servidor lee tus materias, actividades, notas, prioridades y cuaderno en modo solo lectura. Esos datos no se envían al modelo ni a Wikipedia y no se modifican. No debes escribir contraseñas ni datos de terceros.");
+    return partes.join(" ");
+  }
+  function hintTexto() {
+    const info = state.info || {};
+    if (info.modeloActivo) {
+      return info.webActiva
+        ? "Pregúntame por tus pendientes, materias o índice P. Las preguntas generales usan el modelo local y Wikipedia; Enter envía, Shift+Enter salta línea."
+        : "Pregúntame por tus pendientes, materias o índice P. Las preguntas generales usan el modelo local; Enter envía, Shift+Enter salta línea.";
+    }
+    return LOCAL_HINT;
+  }
   const state = { info: null, sending: false, messages: [] };
   const userID = () => String(window.KairosAuth?.user?.id || "local");
-  const mode = () => state.info?.mode === "n8n" ? "n8n" : "local";
-  // Cambiar de modo vuelve a pedir el aviso: el destino de los mensajes cambia.
-  const privacyKey = () => "kairos-agent-privacy:" + userID() + ":" + mode();
+  const privacyKey = () => "kairos-agent-privacy:" + userID();
 
   const el = {};
   ["agent-state", "agent-privacy", "agent-privacy-text", "agent-privacy-ok", "agent-log", "agent-form", "agent-input", "agent-hint", "agent-clear", "agent-prompts", "agent-mode-label", "agent-small-note"].forEach(id => {
@@ -28,10 +52,7 @@
     try { localStorage.setItem(privacyKey(), "1"); } catch (error) { /* almacenamiento no disponible */ }
   }
   function updatePrivacyText() {
-    if (!el["agent-privacy-text"]) return;
-    el["agent-privacy-text"].textContent = mode() === "n8n"
-      ? "Los mensajes que escribas se envían al flujo de n8n configurado por el equipo del proyecto y pueden pasar por el modelo de IA que ese flujo use. Solo se envía el texto que escribas; no se envían materias, notas ni actividades automáticamente. El asistente no registra nada por su cuenta y no debes escribir contraseñas ni datos de terceros."
-      : "En este momento el asistente funciona con reglas locales en el servidor de KAIROS: tus mensajes no se envían a un modelo de IA externo ni a n8n. Solo se procesa el texto que escribas; no se envían materias, notas ni actividades automáticamente. El asistente no registra nada por su cuenta y no debes escribir contraseñas ni datos de terceros. Si el equipo activa n8n, este aviso lo indicará antes de escribir.";
+    if (el["agent-privacy-text"]) el["agent-privacy-text"].textContent = privacyText();
   }
   function showPrivacyGate() {
     updatePrivacyText();
@@ -41,11 +62,20 @@
     if (!accepted) el["agent-privacy-ok"]?.focus();
   }
   function updateModeLabels() {
-    const remote = mode() === "n8n";
-    if (el["agent-mode-label"]) el["agent-mode-label"].textContent = remote
-      ? "Conectado por n8n · sin decisiones automáticas"
-      : "Reglas locales · sin decisiones automáticas";
-    if (el["agent-small-note"]) el["agent-small-note"].textContent = remote ? "Conectado por n8n" : "Reglas locales";
+    const info = state.info || {};
+    const modelo = !!info.modeloActivo;
+    if (el["agent-mode-label"]) {
+      el["agent-mode-label"].textContent = modelo
+        ? (info.webActiva
+            ? "Modelo local + reglas + web + tus datos · sin decisiones automáticas"
+            : "Modelo local + reglas + tus datos · sin decisiones automáticas")
+        : "Reglas locales + tus datos · sin decisiones automáticas";
+    }
+    if (el["agent-small-note"]) {
+      el["agent-small-note"].textContent = modelo
+        ? (info.webActiva ? "Modelo local + reglas + web + tus datos" : "Modelo local + reglas + tus datos")
+        : "Reglas locales + tus datos";
+    }
   }
 
   function setStatus(text, tone) {
@@ -70,19 +100,18 @@
       setStatus("Sin comprobar", "off");
     } else if (!info.allowed) {
       setStatus("Cuenta no habilitada", "off");
-    } else if (info.mode === "n8n") {
-      setStatus("Disponible · n8n", "on");
     } else {
-      setStatus("Disponible · local", "on");
+      const sufijo = info.modeloActivo
+        ? (info.webActiva ? " · modelo local + reglas + web + tus datos" : " · modelo local + reglas + tus datos")
+        : " · reglas locales + tus datos";
+      setStatus("Disponible" + sufijo, "on");
     }
     if (!available) {
       el["agent-hint"].textContent = (info && info.message ? info.message + " " : "") + "La revisión local de instrucciones sigue disponible en el formulario de actividades.";
     } else if (state.sending) {
       el["agent-hint"].textContent = "El asistente está respondiendo. Enter envía, Shift+Enter hace un salto de línea.";
-    } else if (info.mode === "n8n") {
-      el["agent-hint"].textContent = "El asistente propone; tú confirmas. Enter envía, Shift+Enter hace un salto de línea.";
     } else {
-      el["agent-hint"].textContent = "Reglas locales: tus mensajes no salen del servidor de KAIROS. Enter envía, Shift+Enter hace un salto de línea.";
+      el["agent-hint"].textContent = hintTexto();
     }
     showPrivacyGate();
     setBusy(state.sending);
@@ -289,10 +318,8 @@
     renderHistory();
     el["agent-input"].value = "";
     resize();
+    el["agent-hint"].textContent = hintTexto();
     el["agent-input"].focus();
-    if (state.info?.mode === "local") {
-      el["agent-hint"].textContent = "Reglas locales: tus mensajes no salen del servidor de KAIROS. Enter envía, Shift+Enter hace un salto de línea.";
-    }
   }
 
   el["agent-form"].addEventListener("submit", event => {
