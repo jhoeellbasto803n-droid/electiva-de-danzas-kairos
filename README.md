@@ -1,87 +1,69 @@
-# KAIROS — Ciencias de Datos (Python)
+# KAIROS — Organizador de Ciencias de Datos
 
-Versión Python del organizador KAIROS para estudiantes de Ciencias de Datos. Incluye materias y actividades ficticias de Python/pandas, estadística, bases de datos, aprendizaje automático y visualización; planificador por cuenta, cronómetro con alarma, cinco modos de priorización, cuaderno privado de experimentos, controles de cuenta y aplicación instalable. Incluye el revisor local de instrucciones y un asistente académico que, por defecto, responde con reglas deterministas sin enviar texto a ningún servicio externo. Si el equipo configura un webhook de n8n, el mismo asistente puede usar ese flujo; sin esa configuración, el chat local sigue funcionando.
+Aplicación KAIROS para estudiantes de Ciencias de Datos con registro e inicio de sesión, almacenamiento PostgreSQL separado por cuenta, materias y ejemplos ficticios de Python/pandas, estadística, SQL, aprendizaje automático y visualización. Incluye planificación explicable, bitácora privada de experimentos, exportación CSV, controles de cuenta y modo instalable. El agente de IA y las integraciones institucionales siguen en preparación.
 
-El servidor Python sustituye a Express y conserva las rutas `/api` que usa la interfaz. Las cuentas y los planes se guardan en PostgreSQL usando las mismas tablas `app_users` y `planner_data`; la sesión del servidor Python usa su propia tabla `kairos_python_sessions`. La versión Node puede seguir en la misma carpeta original y usar la misma base de datos. Esta copia abre por defecto en el puerto **3001**, para que las dos versiones puedan convivir.
+## Cómo abrirlo
 
-## Inicio rápido en Windows
+En Windows, inicia `INICIAR-ELECTIVA.bat`. La primera vez completa `.env` cuando el Bloc de notas se abra, comprueba que PostgreSQL esté iniciado y que exista la base `electiva_danzas`; luego vuelve a ejecutar el iniciador. Mantén la ventana del servidor abierta y visita `http://localhost:3000`. El iniciador usa `npm.cmd`, que funciona desde Windows PowerShell sin cambiar su política de ejecución.
 
-1. Instala PostgreSQL y crea la base de datos `electiva_danzas` si todavía no existe. En pgAdmin: clic derecho en **Databases → Create → Database**, escribe `electiva_danzas` y guarda. No hace falta crear tablas manualmente.
-2. Haz doble clic en `INICIAR-PYTHON.bat`.
-3. La primera vez el programa genera automáticamente una clave de sesión y abre `.env` en el Bloc de notas. Reemplaza `TU_PASSWORD` por la contraseña de PostgreSQL. Guarda y cierra el archivo.
-4. Ejecuta `INICIAR-PYTHON.bat` otra vez. El programa crea `.venv`, descarga las bibliotecas y arranca el servidor.
-5. Abre **http://localhost:3001** en el navegador y crea tu cuenta.
 
-Si la contraseña de PostgreSQL contiene caracteres especiales como `@`, `:` o `/`, codifícalos para URL dentro de `DATABASE_URL` (por ejemplo, `@` se escribe `%40`). Si tu usuario, servidor o nombre de base son distintos, actualiza también esa parte de `DATABASE_URL`. El archivo `.env` es privado y está excluido del ZIP.
+1. Instala Node.js 20 o superior y PostgreSQL.
+2. Crea una base de datos llamada `electiva_danzas` (por ejemplo: `psql -U postgres -c "CREATE DATABASE electiva_danzas;"`).
+3. Copia `.env.example` como `.env`; actualiza `DATABASE_URL` y `APP_ORIGIN`. Genera `SESSION_SECRET` con `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
+4. Ejecuta `npm install` y después `npm start`.
+5. Abre `http://localhost:3000` y crea una cuenta. Cada cuenta recibe datos ficticios de Ciencia de Datos que puedes retirar desde el resumen. La bitácora permite registrar y exportar experimentos.
 
-## Abrir y trabajar en Visual Studio Code
+La aplicación requiere el servidor para iniciar sesión y sincronizar materias y actividades. No abras `index.html` directamente.
 
-Abre esta carpeta desde VS Code con **Archivo → Abrir carpeta…**. Selecciona `electiva-de-danzas-python`. También puedes abrir una terminal en esta carpeta y ejecutar `code .`.
+## Funciones
 
-Después de crear `.venv`, selecciona como intérprete `.venv\Scripts\python.exe` desde **Python: Select Interpreter**. El archivo `.vscode/launch.json` permite iniciar el servidor con **F5** una vez que `.env` esté configurado. El lanzador por lotes ofrece la ruta más sencilla para el uso normal.
+- Tipografía local Inter para lectura y Poppins para títulos; las fuentes se sirven desde el proyecto y no requieren que el navegador dependa de Google Fonts.
+- Tema oscuro de alto contraste, alternable con el tema claro desde la barra superior o Preferencias.
+- Cinco sistemas de priorización seleccionables y persistentes. La selección reorganiza las sugerencias, el puntaje y la distribución semanal.
+- Crear, editar y eliminar materias, incluida la nota actual usada como contexto.
+- Crear, editar, completar y eliminar tareas, talleres, exámenes y sesiones de estudio.
+- Guardar fechas, ponderaciones, horas, opcionalidad, tipo normalizado y texto de origen.
+- Analizar localmente instrucciones para sugerir tipos, fechas explícitas, porcentajes y horas; advertir ante varias fechas, varios pesos o señales contradictorias como «opcional» y «vital». Ninguna sugerencia se guarda automáticamente.
+- Confirmar manualmente fechas y ponderaciones antes de usar una actividad en la priorización.
+- Ver agenda, pendientes, búsqueda, filtros y carga de las próximas jornadas.
+- Comparar los cinco sistemas de priorización. Un optimizador de capacidad elige la combinación de actividades que cabe antes de sus fechas límite; cada escenario muestra lo incluido y el costo de oportunidad por actividad, sin sumar pesos de materias distintas ni estimar notas perdidas.
+- Plan semanal por día: configura tus horas disponibles, repártelas por igual o vacía la semana. El plan distribuye actividades confirmadas en bloques de máximo 90 minutos y detecta horas que no caben antes de la fecha límite. Puedes saltar desde un bloque al temporizador asociado.
+- Temporizador de concentración con bloques rápidos de 15, 25 y 50 minutos o duración personalizada entre 1 y 240 minutos. Pausa, continúa, reinicia o guarda una sesión; una alarma sonora avisa al terminar y puedes probarla o desactivarla. Puedes asociar la sesión a una actividad; se registran minutos realizados y aparecen en su ficha.
+- Usar el cuaderno de datos para guardar, editar y eliminar experimentos con pregunta, fuente, método, métrica, resultados, límites y pasos siguientes; exportar la bitácora como CSV.
+- Cambiar la contraseña con verificación de la actual, cerrar sesiones en ambas versiones y eliminar la cuenta con confirmación reforzada.
+- Instalar la interfaz como PWA; necesita conexión para autenticación y sincronización.
+- Exportar o restaurar una copia JSON de actividades, materias, preferencias y sesiones.
+- Módulo `ai-agent.js` reservado para integrar un agente después.
+- Registro e inicio de sesión con contraseñas protegidas mediante `scrypt`, cookie de sesión HTTP-only y sesiones persistidas en PostgreSQL.
+- API que guarda una copia de planificación JSON independiente por cuenta; los cambios se sincronizan automáticamente y el estado de conexión se muestra en la interfaz.
+- Perfil visible y cierre de sesión para separar sesiones en dispositivos compartidos.
 
-## Variables de entorno
+## Importación de calendario
 
-| Variable | Uso | Valor inicial |
-| --- | --- | --- |
-| `DATABASE_URL` | Conexión a PostgreSQL | `postgresql://postgres:TU_PASSWORD@localhost:5432/electiva_danzas` |
-| `SESSION_SECRET` | Firma y protección de sesiones | Secreto aleatorio de al menos 32 caracteres |
-| `APP_ORIGIN` | Protección contra solicitudes de otro sitio | `http://localhost:3001` |
-| `HOST` y `PORT` | Dirección de escucha local | `127.0.0.1` y `3001` |
-| `DB_POOL_MAX` | Conexiones PostgreSQL máximas | `30` |
-| `WEB_THREADS` | Hilos HTTP de Waitress | `32` |
-| `AGENT_MODE` | `auto` usa n8n si está configurado; `local` fuerza reglas locales; `n8n` exige webhook y clave | `auto` |
-| `N8N_WEBHOOK_URL` | URL HTTPS del webhook del asistente en n8n | Vacío (se usa el modo local) |
-| `N8N_SHARED_SECRET` | Clave que el servidor envía a n8n en `x-kairos-key` | Vacío (se usa el modo local) |
-| `AGENT_ALLOWED_EMAILS` | Correos del piloto separados por coma | Vacío (cualquier cuenta con sesión) |
+La lectura de archivos `.ics` y `.csv` ocurre en el navegador; las actividades importadas se sincronizan con la cuenta después de guardarse. En archivos `.ics` admite eventos y tareas VTODO; usa la propiedad `DUE` si existe y, si no, `DTSTART`. La fecha debe revisarse porque puede representar otra cosa, y los calendarios recurrentes no se expanden. Para CSV, se espera una columna de actividad/título y otra de fecha/fecha límite.
 
-`preparar_configuracion.py` genera automáticamente un secreto aleatorio seguro cuando crea `.env`.
+Las actividades importadas quedan en **Por confirmar**. Si el archivo no contiene ponderación u horas, se asignan valores temporales (0% y 1 hora) para que se completen manualmente antes de priorizar. Esta función importa un archivo exportado; no inicia sesión ni sincroniza cambios en vivo con Moodle, Canvas, Teams u otro portal.
 
-## Instalación manual
+## Lógica y límites
 
-Desde esta carpeta, configura `.env` a partir de `.env.example` y ejecuta:
+Elige entre cinco criterios: equilibrado, fecha más próxima, mayor ponderación, tareas breves primero o materia que necesita apoyo. La elección modifica las recomendaciones, el puntaje y el orden del plan. El revisor local usa patrones explícitos y no afirma resolver instrucciones complejas por sí solo. El optimizador selecciona una combinación de actividades completas que maximiza la suma del índice activo dentro de la capacidad disponible y las fechas límite; no inventa horas para hacer viable un plan imposible. Son heurísticas configurables, no fórmulas validadas ni predicciones de calificaciones. El peso mostrado corresponde a cada corte o materia; no se suma entre materias ni se convierte en una nota perdida. Las horas estimadas se distribuyen en sesiones de máximo 90 minutos. Puedes editar cada día, repartir las horas o vaciar la semana. Es una propuesta y no reserva horas reales en un calendario. Los escenarios no suman porcentajes de materias distintas como si fueran una sola nota.
 
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe app.py
-```
+## Autenticación y despliegue
 
-La app crea las tablas necesarias al iniciar; no es necesario usar pgAdmin para crear las tablas a mano. El servidor informa un error claro si no logra conectarse a PostgreSQL.
+El servidor usa Express, sesiones PostgreSQL y una base de datos PostgreSQL compartida. El pool de conexiones es configurable con DB_POOL_MAX (entre 5 y 100; 30 por defecto) para ajustarlo al plan de PostgreSQL. La aplicación puede guardar más de 100 cuentas; esto no es una prueba de carga ni garantiza 100 conexiones simultáneas. planner_data mantiene un documento JSONB por usuario con límite de 2 MB; para crecer a miles de usuarios o manejar ediciones simultáneas desde varios dispositivos, el siguiente paso es normalizar actividades y materias en tablas y añadir control de conflictos.
 
-## Capacidad y despliegue
+Antes de abrir registros al público, configura HTTPS y un SESSION_SECRET aleatorio de al menos 32 caracteres. El cambio de contraseña requiere la contraseña actual; todavía no hay verificación de correo ni recuperación por email.
 
-Waitress ejecuta la aplicación con hilos y el pool de PostgreSQL reutiliza conexiones. Puede guardar más de 100 cuentas con uso normal; no se ha hecho una prueba de carga que garantice 100 conexiones simultáneas. DB_POOL_MAX permite ajustar el pool entre 5 y 100 (30 por defecto); no lo aumentes por encima del límite de conexiones de tu proveedor. Para publicar la aplicación a un grupo institucional se debe desplegar en un servidor con HTTPS, configurar APP_ENV=production, APP_ORIGIN con el dominio real, HOST=0.0.0.0 detrás de un proxy confiable, y dimensionar el pool y el número de hilos según el servidor. El equipo local no debe exponerse directamente a Internet.
+Para desplegar la versión Node.js en Render, usa el Blueprint `../render.yaml` desde la raíz del repositorio. Configura `DATABASE_URL` con la URL interna de una PostgreSQL en Render y conserva el secreto generado por Render. La aplicación exige `APP_ORIGIN` HTTPS al ejecutarse con `NODE_ENV=production`, confía en un solo proxy frontal para reconocer HTTPS, limita los intentos de autenticación, añade cabeceras HTTP de seguridad y marca las respuestas de la API como privadas y no almacenables en caché. En despliegues con dominio propio, actualiza `APP_ORIGIN` para que coincida exactamente con el dominio.
 
-En producción Python confía un solo proxy frontal para obtener la IP cliente y el protocolo HTTPS. Conserva ese límite: no configures `ProxyFix` para confiar todos los proxies ni expongas Waitress directamente a Internet. El servidor aplica límites de intentos de autenticación por IP, poda las entradas antiguas de ese limitador, rechaza contraseñas de inicio de sesión mayores al límite admitido, protege las respuestas de API contra caché y requiere el origen correcto también al cerrar sesión. Para producción, usa PostgreSQL con almacenamiento persistente y copias de seguridad; la base gratuita de Render caduca a los 30 días. El asistente añade su propio límite de 12 consultas por minuto y por cuenta, un tiempo máximo de espera de 55 segundos y límites de tamaño en la solicitud y la respuesta.
+El escaneo de dependencias se ejecuta desde GitHub Actions y Dependabot revisa versiones semanalmente. Una base PostgreSQL gratuita de Render vence a los 30 días y no tiene copias de seguridad; selecciona almacenamiento persistente y respaldado si vas a guardar datos reales.
 
-## Asistente académico
+## Agente de IA futuro
 
-La vista **Asistente** funciona de inmediato con reglas locales en el servidor: no necesita claves, internet ni un modelo generativo. Analiza el mensaje, señala candidatos y explica el índice P, el plan semanal o las funciones de KAIROS. El navegador envía el mensaje a `POST /api/agent`; el servidor añade el identificador de la cuenta desde la sesión y responde. Antes del primer mensaje se muestra un aviso de privacidad; la conversación no se guarda en PostgreSQL ni en `localStorage`.
+`ai-agent.js` ofrece por ahora una revisión determinista local con expresiones y reglas básicas: sugiere candidatos, muestra contexto y advierte ambigüedades; no pretende comprender semántica compleja ni enviar texto fuera del navegador. La arquitectura futura separará: (1) extracción probabilística de texto; (2) reglas deterministas para validar fechas, ponderaciones y contradicciones; y (3) optimización y escenarios. Las extracciones inciertas requieren confirmación del estudiante. El prototipo no se conecta a plataformas en vivo, no hace trabajos y no los entrega. Las tres materias, sus notas y las ponderaciones y fechas de ejemplo son inventadas para mostrar la interfaz; confirma todos esos datos con tu docente antes de usarlos.
 
-El asistente puede proponer actividades, pero no las guarda: cada propuesta aparece como una tarjeta con el botón **Preparar en el formulario**, que abre la actividad con los datos sugeridos sin confirmar. La persona revisa fechas, ponderaciones y horas, y confirma manualmente.
 
-n8n es una opción secundaria. Si el equipo define `N8N_WEBHOOK_URL` y `N8N_SHARED_SECRET`, `AGENT_MODE=auto` reenvía los mensajes a ese webhook; la URL y la clave nunca llegan al navegador. Para configurarlo, consulta [`docs/N8N-AGENTE.md`](docs/N8N-AGENTE.md). Con `AGENT_MODE=local`, el asistente local sigue activo aunque existan esas credenciales.
 
-## Estructura
-
-- `app.py`: autenticación, sesiones PostgreSQL, almacenamiento del plan, API, asistente (local o n8n) y servidor Waitress.
-- `local_agent.py`: reglas deterministas del asistente local; no usa servicios externos.
-- Interfaz web compartida con Node, con cuaderno de datos, exportación CSV y modo instalable.
-- `static/agent-chat.js`: vista del asistente; aviso de privacidad, conversación y propuestas que solo abren el formulario.
-- `docs/N8N-AGENTE.md`: modos local y n8n, contrato del webhook, variables de entorno y pasos de despliegue.
-- `requirements.txt`: dependencias Python.
-- `.env.example`: plantilla de configuración; duplica como `.env` para uso local.
-- `.vscode/launch.json`: configuración para depurar con VS Code.
-- `INICIAR-PYTHON.bat`: prepara las dependencias la primera vez y ejecuta la app.
-
-## Revisión de instrucciones y prioridad
-
-En el editor de actividades puedes analizar localmente texto copiado desde un aula virtual. Se muestran candidatos de fechas, porcentajes, horas y categorías normalizadas; varias fechas, pesos o expresiones opuestas quedan señaladas para que revises la fuente. Seleccionar un candidato solo lo copia al formulario; todavía debes verificar y confirmar. El planificador compara combinaciones que caben según el criterio seleccionado y el tiempo disponible, sin estimar una nota perdida ni sumar porcentajes de materias distintas. El plan semanal también admite actividades confirmadas sin fecha límite, sin asignarles una fecha artificial.
-
-## Prioridad y estimaciones
-
-La pantalla Actividades explica los componentes I, U y W, el resultado P y la versión de la fórmula. Si falta una fecha o una ponderación confirmada, no asigna un valor ficticio: excluye el componente y renormaliza los pesos restantes. Las horas sugeridas usan el catálogo de tipos y se ajustan con sesiones de enfoque completadas, acercándose gradualmente al historial personal. Las alertas se muestran dentro de la aplicación; no envían correo ni notificaciones push.
 
 ## Exportar el horario semanal
 
