@@ -106,15 +106,11 @@
     if (!response.ok) throw new Error(data?.error || "No pude comprobar el asistente.");
     return data || {};
   }
-  async function chat(message, context) {
+  async function chat(message) {
     const text = String(message || "").trim();
     if (!text) throw new Error("Escribe un mensaje antes de enviarlo.");
     if (text.length > 4000) throw new Error("El mensaje supera los 4000 caracteres.");
     const body = { mensaje: text };
-    if (context && typeof context === "object") {
-      if (context.candidatos !== undefined) body.candidatos = context.candidatos;
-      if (context.advertencias !== undefined) body.advertencias = context.advertencias;
-    }
     const response = await fetch("/api/agent", {
       method: "POST",
       credentials: "same-origin",
@@ -127,5 +123,5 @@
     if (!data || typeof data.texto !== "string" || !data.texto.trim()) throw new Error("El asistente devolvió una respuesta inesperada.");
     return { texto: data.texto, acciones: Array.isArray(data.acciones) ? data.acciones : [] };
   }
-  window.KairosAgent=Object.freeze({status:"local-first",localReview:true,catalog,analyzeActivityCandidates:async sourceText=>analyze(sourceText),chat,agentStatus});
+  window.KairosAgent=Object.freeze({status:"local",localReview:true,catalog,analyzeActivityCandidates:async sourceText=>analyze(sourceText),chat,agentStatus});
 })();

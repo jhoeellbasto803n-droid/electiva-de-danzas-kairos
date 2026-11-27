@@ -1,4 +1,4 @@
-@font-face{font-family:"Inter";src:url("fonts/inter-variable-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+﻿@font-face{font-family:"Inter";src:url("fonts/inter-variable-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:"Poppins";src:url("fonts/poppins-400-latin.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"Poppins";src:url("fonts/poppins-500-latin.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
 @font-face{font-family:"Poppins";src:url("fonts/poppins-600-latin.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
@@ -157,3 +157,136 @@ html[data-theme="dark"] .agent-msg.error{background:#2b1a1f;border-color:#5d3945
 html[data-theme="dark"] .agent-msg.error small{color:#f0a0a0}
 html[data-theme="dark"] .agent-action{background:#171d2a;border-color:#30394c}
 @media(max-width:900px){.agent-layout{grid-template-columns:1fr}.agent-chat{min-height:0}.agent-log{max-height:400px}}
+/* KAIROS · mejoras de interfaz y accesibilidad (AA) */
+:root{--muted:#5d6174;--text-soft:#5f6477;--focus-ring:#5e3fc4}
+html:not([data-theme="dark"]) .brand-copy small,
+html:not([data-theme="dark"]) .eyebrow,
+html:not([data-theme="dark"]) .view-title small,
+html:not([data-theme="dark"]) .section-head small,
+html:not([data-theme="dark"]) .recommend>small,
+html:not([data-theme="dark"]) .agent-banner small,
+html:not([data-theme="dark"]) .formula>small,
+html:not([data-theme="dark"]) .connection-card>small,
+html:not([data-theme="dark"]) .plan-grid-head>div>small,
+html:not([data-theme="dark"]) .privacy,
+html:not([data-theme="dark"]) .crumb,
+html:not([data-theme="dark"]) .today,
+html:not([data-theme="dark"]) .welcome p,
+html:not([data-theme="dark"]) .view-title p,
+html:not([data-theme="dark"]) .capacity p,
+html:not([data-theme="dark"]) .recommend p,
+html:not([data-theme="dark"]) .setting p,
+html:not([data-theme="dark"]) .formula p,
+html:not([data-theme="dark"]) .connection-card>p,
+html:not([data-theme="dark"]) .task-meta,
+html:not([data-theme="dark"]) .task-source,
+html:not([data-theme="dark"]) .subject-stats,
+html:not([data-theme="dark"]) .plan-hint,
+html:not([data-theme="dark"]) .plan-status span,
+html:not([data-theme="dark"]) .plan-day-setting,
+html:not([data-theme="dark"]) .plan-slot small,
+html:not([data-theme="dark"]) .focus-summary,
+html:not([data-theme="dark"]) .empty,
+html:not([data-theme="dark"]) .filter,
+html:not([data-theme="dark"]) .logout,
+html:not([data-theme="dark"]) .agent-state{color:#5f6377}
+html:not([data-theme="dark"]) .stats small,
+html:not([data-theme="dark"]) .stats span,
+html:not([data-theme="dark"]) .agenda-info small,
+html:not([data-theme="dark"]) .agenda-meta small,
+html:not([data-theme="dark"]) .hours span,
+html:not([data-theme="dark"]) .meter-label,
+html:not([data-theme="dark"]) .reason,
+html:not([data-theme="dark"]) .scenario-listing,
+html:not([data-theme="dark"]) .scenario-listing.muted,
+html:not([data-theme="dark"]) .agent-banner p,
+html:not([data-theme="dark"]) footer{color:#5f6377}
+html:not([data-theme="dark"]) .stats strong span{color:inherit}
+html:not([data-theme="dark"]) .scenario-listing b,
+html:not([data-theme="dark"]) .scenario-listing.muted b{color:#3f4354}
+html:not([data-theme="dark"]) .fine{color:#5f6377!important}
+html:not([data-theme="dark"]) .cloud-status{color:#2f6a50}
+html:not([data-theme="dark"]) .cloud-status.saving{color:#7a5418;background:#fff3dc}
+html:not([data-theme="dark"]) .cloud-status.offline{color:#8f3434;background:#ffefef}
+html:not([data-theme="dark"]) .agent-banner small,
+html:not([data-theme="dark"]) .agent-banner>span{color:#5b4699}
+html:not([data-theme="dark"]) .agent-banner>span{background:#f0ecfc}
+html:not([data-theme="dark"]) .nav{color:#565a6d}
+html:not([data-theme="dark"]) .plan-day-setting>span:last-child,
+html:not([data-theme="dark"]) .plan-day-head small,
+html:not([data-theme="dark"]) .plan-day-head>strong small,
+html:not([data-theme="dark"]) .plan-slot small,
+html:not([data-theme="dark"]) .plan-free,
+html:not([data-theme="dark"]) .focus-duration button,
+html:not([data-theme="dark"]) .focus-summary{color:#5f6377}
+html:not([data-theme="dark"]) .stats sup{color:#5f6377}
+
+.skip-link{position:fixed;left:14px;top:14px;z-index:100;padding:10px 14px;border-radius:9px;background:#22243a;color:#fff;font-size:12px;font-weight:700;text-decoration:none;transform:translateY(-180%);transition:transform .16s ease}
+.skip-link:focus-visible{transform:translateY(0);outline:3px solid #a68aff;outline-offset:2px}
+main:focus{outline:none}
+main:focus-visible{outline:3px solid #a68aff;outline-offset:-3px}
+main{scroll-margin-top:76px}
+.nav{position:relative}
+.nav.active{box-shadow:inset 3px 0 0 var(--purple)}
+.agent-readonly{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:#e8f7f0;color:#25704c;font-size:9px;font-weight:800;letter-spacing:.4px;white-space:nowrap}
+.agent-readonly::before{content:"▣";font-size:10px}
+.agent-chat-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.agent-prompts-group{display:grid;gap:7px}
+.agent-prompts-group>small{font-size:9px;letter-spacing:.7px;color:var(--muted);font-weight:800;padding:2px 2px 0}
+.agent-prompt-list button.account{border-color:var(--purple);background:var(--surface-soft);box-shadow:inset 3px 0 0 var(--purple)}
+.scenario-details{margin-top:9px;padding-top:7px;border-top:1px solid var(--line)}
+.scenario-details summary{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10px;font-weight:750;color:var(--accent-strong);list-style:none;padding:6px 0;min-height:24px}
+.scenario-details summary::-webkit-details-marker{display:none}
+.scenario-details summary::before{content:"▸";transition:transform .15s ease}
+.scenario-details[open] summary::before{transform:rotate(90deg)}
+.scenario-details .scenario-listing{max-height:120px;overflow:auto;margin-top:6px}
+.scenario-details .scenario-listing+.scenario-listing{margin-top:8px}
+summary:focus-visible{outline:3px solid #a68aff;outline-offset:2px;border-radius:4px}
+@media(max-width:980px){.stack{grid-template-columns:repeat(2,minmax(0,1fr))}#focus-card{grid-column:1/-1}.art{display:none}.welcome{min-height:0;padding:6px 0}}
+@media(max-width:900px){.art{display:none}.welcome{min-height:0;padding:6px 0}}
+@media(max-width:800px){.agent-chat-actions{justify-content:flex-end}}
+@media(max-width:700px){
+  .sidebar{overflow-y:auto}
+  .task{grid-template-columns:1fr}
+  .task-side{text-align:left;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .task-buttons{margin-top:0;margin-left:auto}
+  .agent-chat-head{align-items:flex-start;gap:8px}
+  .agent-form{flex-direction:column;align-items:stretch}
+  .agent-form .primary{width:100%}
+}
+@media(max-width:640px) and (min-width:421px){.stats{grid-template-columns:1fr 1fr}.stats article:last-child{grid-column:1/-1}}
+@media(max-height:680px){
+  .sidebar{padding-top:18px;padding-bottom:12px}
+  .brand{padding:0 0 24px}
+  .sidebar nav{gap:3px}
+  .nav{height:38px}
+  .privacy{padding-top:8px}
+}
+@media(prefers-reduced-motion:reduce){.skip-link{transition:none}}
+
+/* KAIROS · ajustes de contraste restantes */
+html:not([data-theme="dark"]) .agent-small small{color:#5f6377}
+html:not([data-theme="dark"]) .demo-note span{color:#5f6377}
+html:not([data-theme="dark"]) .demo-note b{color:#5d4a28}
+
+/* KAIROS · importar materias (JSON/CSV/XLSX) */
+.subject-actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+.subject-actions .outline{background:var(--surface,#fff);border:1px solid var(--line);color:var(--accent-strong,#6242d0)}
+.subject-actions .outline:hover{background:var(--lav,#f1edff)}
+@media(max-width:700px){.subject-actions{justify-content:flex-start;width:100%}.subject-actions>button{width:100%}}
+
+/* KAIROS · contraste en Materias */
+html:not([data-theme="dark"]) .mini{color:#5f6377}
+html:not([data-theme="dark"]) .subject p{color:#5f6377}
+html:not([data-theme="dark"]) .grade small{color:#5f6377}
+html:not([data-theme="dark"]) .note{color:#5f6377}
+html:not([data-theme="dark"]) .note b{color:#3f4354}
+html:not([data-theme="dark"]) .subject-stats{color:#5f6377}
+
+/* KAIROS · contraste del estado de guardado en tema oscuro */
+html[data-theme="dark"] .cloud-status{background:#17332a;color:#8fe0b6}
+html[data-theme="dark"] .cloud-status.saving{background:#33271a;color:#f0c07a}
+html[data-theme="dark"] .cloud-status.offline{background:#33271a;color:#f0a0a0}
+
+/* KAIROS · el atributo hidden siempre oculta, aunque la regla base tenga display */
+[hidden]{display:none!important}
