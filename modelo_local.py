@@ -33,6 +33,11 @@ def _numero_env(nombre: str, valor: str) -> float:
 
 MODELO_LOCAL_URL = os.getenv("MODELO_LOCAL_URL", "http://127.0.0.1:11434").strip().rstrip("/")
 MODELO_LOCAL_NOMBRE = os.getenv("MODELO_LOCAL_NOMBRE", "").strip()
+MODELO_LOCAL_HOSTS = {
+    host.strip().lower()
+    for host in os.getenv("MODELO_LOCAL_HOSTS", "").split(",")
+    if host.strip()
+}
 MODELO_LOCAL_TIMEOUT = _numero_env("MODELO_LOCAL_TIMEOUT", "60")
 WEB_ACTIVO = os.getenv("WEB_PUBLICA", "0").strip().lower() in {"1", "true", "si", "yes"}
 WEB_TIMEOUT = _numero_env("WEB_TIMEOUT", "10")
@@ -40,14 +45,23 @@ WEB_RESULTADOS = 3
 RESPUESTA_MAX = 128 * 1024
 WEB_MAX = 256 * 1024
 
-_partes = urlsplit(MODELO_LOCAL_URL)
-if (
-    _partes.scheme != "http"
-    or _partes.hostname not in {"localhost", "127.0.0.1", "::1"}
-    or _partes.path not in ("", "/")
-):
+def _url_modelo_permitida(url: str) -> bool:
+    """Solo localhost o hosts autorizados explícitamente por configuración."""
+    partes = urlsplit(url)
+    if partes.scheme not in {"http", "https"} or partes.path not in ("", "/"):
+        return False
+    host = (partes.hostname or "").lower()
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    return any(host == permitido or host.endswith("." + permitido) for permitido in MODELO_LOCAL_HOSTS)
+
+
+if not _url_modelo_permitida(MODELO_LOCAL_URL):
     if MODELO_LOCAL_NOMBRE:
-        logger.warning("MODELO_LOCAL_URL debe ser HTTP en localhost; modelo local desactivado.")
+        logger.warning(
+            "MODELO_LOCAL_URL no autorizada. Usa localhost o añade el host a MODELO_LOCAL_HOSTS; "
+            "modelo local desactivado."
+        )
     MODELO_LOCAL_NOMBRE = ""
 
 SISTEMA = """Eres el asistente de KAIROS para estudiantes de Ciencias de Datos.
