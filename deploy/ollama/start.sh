@@ -7,6 +7,7 @@ SERVIDOR=$!
 # La imagen no trae wget/curl; esperamos unos segundos a que arranque.
 sleep 10
 
-ollama pull llama3.2:1b || true
+# Descarga en segundo plano: no bloquea el healthcheck del despliegue.
+(ollama pull llama3.2:1b || true) &
 
 wait "$SERVIDOR"
